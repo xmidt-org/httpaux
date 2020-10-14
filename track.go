@@ -246,100 +246,56 @@ var decorators = [16]func(*responseWriterDecorator) http.ResponseWriter{
 	},
 }
 
-// TB is a fluent builder for creating a server middleware that creates TrackingWriter
-// objects for downstream handlers.  This type should be instantiated with Track.
-type TB struct {
+// OB is a fluent builder for constructing an observable HTTP transaction.  This
+// type should be constructed with Observe.
+type OB struct {
 	before        []BeforeHandle
 	onWriteHeader []OnWriteHeader
 	onWrite       []OnWrite
 	after         []AfterHandle
 }
 
-// Track starts a fluent builder chain for building a server middleware for tracking
-// serverside request processing.
-func Track() *TB {
-	return new(TB)
+func Observe() *OB {
+	return new(OB)
 }
 
-// Before appends callbacks that are invoked before the request is actually handled
-func (tb *TB) Before(f ...BeforeHandle) *TB {
-	tb.before = append(tb.before, f...)
-	return tb
+func (ob *OB) Before(f ...BeforeHandle) *OB {
+	ob.before = append(ob.before, f...)
+	return ob
 }
 
-// OnWriteHeader appends callbacks that are invoked whenever http.ResponseWriter.WriterHeader
-// is invoked.  Note that if a decorated never calls WriteHeader or writes to the request body,
-// these callbacks will not be called.  This includes panicing before WriteHeader is called.
-func (tb *TB) OnWriteHeader(f ...OnWriteHeader) *TB {
-	tb.onWriteHeader = append(tb.onWriteHeader, f...)
-	return tb
+func (ob *OB) OnWriteHeader(f ...OnWriteHeader) *OB {
+	ob.onWriteHeader = append(ob.onWriteHeader, f...)
+	return ob
 }
 
-// OnWrite appends callbacks that are invoked each time http.ResponseWriter.Write is invoked.
-// If http.Handler code never writes to a response, these callbacks are never invoked.
-func (tb *TB) OnWrite(f ...OnWrite) *TB {
-	tb.onWrite = append(tb.onWrite, f...)
-	return tb
+func (ob *OB) OnWrite(f ...OnWrite) *OB {
+	ob.onWrite = append(ob.onWrite, f...)
+	return ob
 }
 
-// After appends callbacks that are invoked after the request has been handled
-func (tb *TB) After(f ...AfterHandle) *TB {
-	tb.after = append(tb.after, f...)
-	return tb
+func (ob *OB) After(f ...AfterHandle) *OB {
+	ob.after = append(ob.after, f...)
+	return ob
 }
 
-// Then returns a server middleware that decorates handlers using this builder's
-// configuration.  Future changes to this builder will not be reflected in the
-// returned http.Handler.
-func (tb *TB) Then(next http.Handler) http.Handler {
-	return &trackingHandler{
-		next:          next,
-		before:        append([]BeforeHandle{}, tb.before...),
-		onWriteHeader: append([]OnWriteHeader{}, tb.onWriteHeader...),
-		onWrite:       append([]OnWrite{}, tb.onWrite...),
-		after:         append([]AfterHandle{}, tb.after...),
-	}
-}
-
-// trackingHandler is a handler decorator that handles the lifecycle of
-// a TrackingWriter together with the various callbacks
-type trackingHandler struct {
-	next          http.Handler
-	before        []BeforeHandle
-	onWriteHeader []OnWriteHeader
-	onWrite       []OnWrite
-	after         []AfterHandle
-}
-
-func (th *trackingHandler) invokeBefore(r *http.Request) {
-	for _, f := range th.before {
-		f(r)
-	}
-}
-
-func (th *trackingHandler) invokeOnWriteHeader(statusCode int) {
-	for _, f := range th.onWriteHeader {
+func (ob *OB) invokeOnWriteHeader(statusCode int) {
+	for _, f := range ob.onWriteHeader {
 		f(statusCode)
 	}
 }
 
-func (th *trackingHandler) invokeOnWrite(written int64, err error) {
-	for _, f := range th.onWrite {
+func (ob *OB) invokeOnWrite(written int64, err error) {
+	for _, f := range ob.onWrite {
 		f(written, err)
 	}
 }
 
-func (th *trackingHandler) invokeAfter(rw http.ResponseWriter, r *http.Request) {
-	for _, f := range th.after {
-		f(rw, r)
-	}
-}
-
-func (th *trackingHandler) newTrackingWriter(delegate http.ResponseWriter) http.ResponseWriter {
+func (ob *OB) decorate(delegate http.ResponseWriter) http.ResponseWriter {
 	rwd := &responseWriterDecorator{
 		ResponseWriter: delegate,
-		onWriteHeader:  th.invokeOnWriteHeader,
-		onWrite:        th.invokeOnWrite,
+		onWriteHeader:  ob.invokeOnWriteHeader,
+		onWrite:        ob.invokeOnWrite,
 	}
 
 	mask := 0
@@ -362,13 +318,43 @@ func (th *trackingHandler) newTrackingWriter(delegate http.ResponseWriter) http.
 	return decorators[mask](rwd)
 }
 
-func (th *trackingHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	th.invokeBefore(request)
-	tw := th.newTrackingWriter(response)
+// Start begins an observable transaction.  The returned http.ResponseWriter should be
+// passed to any handler code.
+//
+// Using Start (followed by End) directly is appropriate when the callbacks used change
+// from request to request.
+func (ob *OB) Start(response http.ResponseWriter, request *http.Request) http.ResponseWriter {
+	for _, f := range ob.before {
+		f(request)
+	}
 
-	// don't pass the tracking write to after, as any misuse of the API
-	// would result in callbacks
-	defer th.invokeAfter(response, request)
+	return ob.decorate(response)
+}
 
-	th.next.ServeHTTP(tw, request)
+// End concludes an observable transaction.  The http.ResponseWriter passed to this method
+// should be the same as that returned by Start.
+//
+// The typical use of this method is in a defer to ensure that callbacks get invoked
+// after handler code has run.
+func (ob *OB) End(response http.ResponseWriter, request *http.Request) {
+	for _, f := range ob.after {
+		f(response, request)
+	}
+}
+
+// Then is a server middleware that decorates a given http.Handler with this observable's
+// configuration.  This method is appropriate when the set of callbacks are the same
+// for all requests.
+func (ob *OB) Then(next http.Handler) http.Handler {
+	// optimization: if there are no callbacks, don't decorate
+	if len(ob.before) == 0 && len(ob.onWriteHeader) == 0 &&
+		len(ob.onWrite) == 0 && len(ob.after) == 0 {
+		return next
+	}
+
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		ow := ob.Start(response, request)
+		defer ob.End(ow, request)
+		next.ServeHTTP(ow, request)
+	})
 }
