@@ -86,16 +86,6 @@ func (trf *testReaderFrom) ReadFrom(r io.Reader) (int64, error) {
 	return io.Copy(&trf.readFrom, r)
 }
 
-func testObserveNoCallbacks(t *testing.T) {
-	var (
-		assert    = assert.New(t)
-		handler   = ConstantHandler{StatusCode: 236}
-		decorated = Observe().Then(handler)
-	)
-
-	assert.Equal(handler, decorated)
-}
-
 type decorateCase struct {
 	name     string
 	verifier *decorateVerifier
@@ -362,15 +352,14 @@ func newDecorateCases() (cases []decorateCase) {
 	return
 }
 
-func testObserveStart(t *testing.T) {
+func testObserveDecoration(t *testing.T) {
 	for _, testCase := range newDecorateCases() {
 		t.Run(testCase.name, func(t *testing.T) {
 			var (
 				assert  = assert.New(t)
 				require = require.New(t)
 
-				request   = httptest.NewRequest("GET", "/", nil)
-				decorated = Observe().Start(testCase.response, request)
+				decorated = Observe(testCase.response)
 			)
 
 			require.NotNil(decorated)
@@ -382,6 +371,8 @@ func testObserveStart(t *testing.T) {
 			assert.Equal(298, testCase.recorder.Code)
 			assert.Equal(http.Header{"Test": {"true"}}, testCase.recorder.HeaderMap)
 			assert.Equal("test", testCase.recorder.Body.String())
+			assert.Equal(298, decorated.StatusCode())
+			assert.Equal(int64(4), decorated.ContentLength())
 
 			if p, ok := decorated.(http.Pusher); ok {
 				opts := &http.PushOptions{Method: "GET"}
@@ -412,57 +403,20 @@ func testObserveStart(t *testing.T) {
 	}
 }
 
-func testObserveCallbacks(t *testing.T) {
+func testObserveNoDecoration(t *testing.T) {
 	var (
 		assert  = assert.New(t)
 		require = require.New(t)
 
-		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
-
-		beforeCalled bool
-		before       = func(actual *http.Request) {
-			beforeCalled = true
-			assert.Equal(request, actual)
-		}
-
-		onWriteHeaderCalled bool
-		onWriteHeader       = func(statusCode int) {
-			onWriteHeaderCalled = true
-			assert.Equal(275, statusCode)
-		}
-
-		onWriteCalled bool
-		onWrite       = func(c int64, err error) {
-			onWriteCalled = true
-			assert.Equal(int64(c), c)
-			assert.NoError(err)
-		}
-
-		afterCalled bool
-		after       = func(response http.ResponseWriter, actual *http.Request) {
-			afterCalled = true
-			assert.Equal(request, actual)
-		}
-
-		handler   = ConstantHandler{StatusCode: 275, Body: []byte("test")}
-		decorated = Observe().
-				Before(before).
-				OnWriteHeader(onWriteHeader).
-				OnWrite(onWrite).
-				After(after).
-				Then(handler)
+		response  = httptest.NewRecorder()
+		decorated = Observe(response)
 	)
 
 	require.NotNil(decorated)
-	decorated.ServeHTTP(response, request)
-	assert.Equal(275, response.Code)
-	assert.Equal("test", response.Body.String())
 
-	assert.True(beforeCalled)
-	assert.True(onWriteHeaderCalled)
-	assert.True(onWriteCalled)
-	assert.True(afterCalled)
+	again := Observe(decorated)
+	require.NotNil(again)
+	assert.True(decorated == again)
 }
 
 func testObserveWriteWithoutWriteHeader(t *testing.T) {
@@ -471,7 +425,6 @@ func testObserveWriteWithoutWriteHeader(t *testing.T) {
 		require = require.New(t)
 
 		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
 
 		onWriteHeaderCalled bool
 		onWriteHeader       = func(statusCode int) {
@@ -479,31 +432,24 @@ func testObserveWriteWithoutWriteHeader(t *testing.T) {
 			assert.Equal(http.StatusOK, statusCode)
 		}
 
-		onWriteCalled bool
-		onWrite       = func(c int64, err error) {
-			onWriteCalled = true
-			assert.Equal(int64(c), c)
-			assert.NoError(err)
-		}
-
-		handler = http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			// don't call WriteHeader.... the callback should still be called
-			response.Write([]byte("test"))
-		})
-
-		decorated = Observe().
-				OnWriteHeader(onWriteHeader).
-				OnWrite(onWrite).
-				Then(handler)
+		decorated = Observe(response)
 	)
 
 	require.NotNil(decorated)
-	decorated.ServeHTTP(response, request)
+	decorated.OnWriteHeader(onWriteHeader)
+	assert.False(onWriteHeaderCalled)
+
+	decorated.Write([]byte("test"))
 	assert.Equal(http.StatusOK, response.Code)
 	assert.Equal("test", response.Body.String())
-
+	assert.Equal(http.StatusOK, decorated.StatusCode())
 	assert.True(onWriteHeaderCalled)
-	assert.True(onWriteCalled)
+
+	// since WriteHeader was implicitly called, any new callbacks
+	// should be invoked immediately
+	onWriteHeaderCalled = false
+	decorated.OnWriteHeader(onWriteHeader)
+	assert.True(onWriteHeaderCalled)
 }
 
 func testObserveFlushWithoutWriteHeader(t *testing.T) {
@@ -512,7 +458,6 @@ func testObserveFlushWithoutWriteHeader(t *testing.T) {
 		require = require.New(t)
 
 		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
 
 		onWriteHeaderCalled bool
 		onWriteHeader       = func(statusCode int) {
@@ -520,21 +465,23 @@ func testObserveFlushWithoutWriteHeader(t *testing.T) {
 			assert.Equal(http.StatusOK, statusCode)
 		}
 
-		handler = http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			// call Flush without calling WriteHeader
-			response.(http.Flusher).Flush()
-		})
-
-		decorated = Observe().
-				OnWriteHeader(onWriteHeader).
-				Then(handler)
+		decorated = Observe(response)
 	)
 
 	require.NotNil(decorated)
-	decorated.ServeHTTP(response, request)
-	assert.Equal(http.StatusOK, response.Code)
-	assert.True(response.Flushed)
+	decorated.OnWriteHeader(onWriteHeader)
+	assert.False(onWriteHeaderCalled)
 
+	decorated.(http.Flusher).Flush()
+	assert.Equal(http.StatusOK, response.Code)
+	assert.Equal(http.StatusOK, decorated.StatusCode())
+	assert.True(response.Flushed)
+	assert.True(onWriteHeaderCalled)
+
+	// since WriteHeader was implicitly called, any new callbacks
+	// should be invoked immediately
+	onWriteHeaderCalled = false
+	decorated.OnWriteHeader(onWriteHeader)
 	assert.True(onWriteHeaderCalled)
 }
 
@@ -552,48 +499,36 @@ func testObserveReadFromWithoutWriteHeader(t *testing.T) {
 			&testReaderFrom{verifier},
 		}
 
-		request = httptest.NewRequest("GET", "/", nil)
-
 		onWriteHeaderCalled bool
 		onWriteHeader       = func(statusCode int) {
 			onWriteHeaderCalled = true
 			assert.Equal(http.StatusOK, statusCode)
 		}
 
-		onWriteCalled bool
-		onWrite       = func(c int64, err error) {
-			onWriteCalled = true
-			assert.Equal(int64(c), c)
-			assert.NoError(err)
-		}
-
-		handler = http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			// Use the io.ReaderFrom interface without calling WriteHeader
-			// the callback should still get executed
-			response.(io.ReaderFrom).ReadFrom(
-				strings.NewReader("test"),
-			)
-		})
-
-		decorated = Observe().
-				OnWriteHeader(onWriteHeader).
-				OnWrite(onWrite).
-				Then(handler)
+		decorated = Observe(response)
 	)
 
 	require.NotNil(decorated)
-	decorated.ServeHTTP(response, request)
+	decorated.OnWriteHeader(onWriteHeader)
+	assert.False(onWriteHeaderCalled)
+
+	decorated.(io.ReaderFrom).ReadFrom(strings.NewReader("test"))
 	assert.Equal(http.StatusOK, response.Code)
 	assert.Equal("test", verifier.readFrom.String())
-
+	assert.Equal(http.StatusOK, decorated.StatusCode())
+	assert.Equal(int64(4), decorated.ContentLength())
 	assert.True(onWriteHeaderCalled)
-	assert.True(onWriteCalled)
+
+	// since WriteHeader was implicitly called, any new callbacks
+	// should be invoked immediately
+	onWriteHeaderCalled = false
+	decorated.OnWriteHeader(onWriteHeader)
+	assert.True(onWriteHeaderCalled)
 }
 
 func TestObserve(t *testing.T) {
-	t.Run("Start", testObserveStart)
-	t.Run("NoCallbacks", testObserveNoCallbacks)
-	t.Run("Callbacks", testObserveCallbacks)
+	t.Run("Decoration", testObserveDecoration)
+	t.Run("NoDecoration", testObserveNoDecoration)
 	t.Run("WriteWithoutWriteHeader", testObserveWriteWithoutWriteHeader)
 	t.Run("FlushWithoutWriteHeader", testObserveFlushWithoutWriteHeader)
 	t.Run("ReadFromWithoutWriteHeader", testObserveReadFromWithoutWriteHeader)
