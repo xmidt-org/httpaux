@@ -16,7 +16,7 @@ The missing functionality from `net/http`
 
 httpaux augments golang's `net/http` package with a few extra goodies:
 
-- `RoundTripperFunc` type that implements http.RoundTripper.  This is an analog to http.HandlerFunc for clients.
+- `RoundTripperFunc` that implements http.RoundTripper.  This is an analog to http.HandlerFunc for clients.
 - `Busy` server middleware that constrains the number of concurrent requests by consulting a `Limiter` strategy
 - `ObservableWriter` which decorates the typical `http.ResponseWriter`, providing visibility into what handlers have written to the response.  This type is intended to enable other middleware such as logging and metrics.
 - `Gate` middleware for both servers and clients which can explicity shut off code.  One typical use case for this is putting an application into maintenance mode.
