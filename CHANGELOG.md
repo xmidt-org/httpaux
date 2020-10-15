@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Observable http.ResponseWriter
 - Constant http.Handler which serves up configurable, static content
 - Error type that exposes HTTP metadata for rendering a response
+- Sonar integration
 
 ## [v0.1.0]
 - Initial creation
