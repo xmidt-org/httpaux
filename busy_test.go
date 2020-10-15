@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,63 +78,33 @@ func testBusyLimited(t *testing.T, onBusy http.Handler, expectedBusyCode int) {
 		assert  = assert.New(t)
 		require = require.New(t)
 
-		waiting  = make(chan struct{})
-		unpaused = make(chan struct{})
-
-		handlerPause = make(chan struct{}, 1)
-		handler      = http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			<-handlerPause
+		handler = http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 			response.WriteHeader(298)
 		})
 
+		limiter = &MaxRequestLimiter{
+			MaxRequests: 1,
+		}
+
 		decorated = Busy{
-			Limiter: &MaxRequestLimiter{
-				MaxRequests: 1,
-			},
-			OnBusy: onBusy,
+			Limiter: limiter,
+			OnBusy:  onBusy,
 		}.Then(handler)
 	)
 
 	require.NotNil(decorated)
 
-	handlerPause <- struct{}{}
 	first := httptest.NewRecorder()
 	decorated.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
 	assert.Equal(298, first.Code)
+	assert.Zero(limiter.counter)
 
-	go func() {
-		defer close(unpaused)
-
-		// pause this request to simulate a long-running ServeHTTP call
-		response := httptest.NewRecorder()
-		close(waiting)
-		decorated.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
-		assert.Equal(298, response.Code)
-	}()
-
-	select {
-	case <-waiting:
-		// passing
-	case <-time.After(time.Second):
-		require.Fail("goroutine did not start waiting")
-	}
-
+	// simulate an overloaded handler
+	limiter.counter = 1
 	second := httptest.NewRecorder()
 	decorated.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
 	assert.Equal(expectedBusyCode, second.Code)
-
-	handlerPause <- struct{}{}
-	select {
-	case <-unpaused:
-		// passing
-	case <-time.After(time.Second):
-		require.Fail("the paused request did not complete")
-	}
-
-	handlerPause <- struct{}{}
-	third := httptest.NewRecorder()
-	decorated.ServeHTTP(third, httptest.NewRequest("GET", "/", nil))
-	assert.Equal(298, third.Code)
+	assert.Equal(int64(1), limiter.counter)
 }
 
 func testBusyUnlimited(t *testing.T) {
