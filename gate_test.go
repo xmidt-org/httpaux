@@ -1,6 +1,7 @@
 package httpaux
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -10,106 +11,169 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testGateAppend(t *testing.T) {
-	testData := []struct {
-		name string
-		gate *Gate
-	}{
-		{
-			name: "",
-			gate: NewGate(),
-		},
-		{
-			name: "test",
-			gate: NewGateCustom("test", nil),
-		},
-	}
-
-	for i, record := range testData {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
+func testGateCallbacksInitiallyOpen(t *testing.T) {
+	for _, count := range []int{0, 1, 2, 5} {
+		t.Run(fmt.Sprintf("count=%d", count), func(t *testing.T) {
 			var (
-				assert = assert.New(t)
+				assert  = assert.New(t)
+				require = require.New(t)
 
-				openedCalled bool
-				opened       = func(n string) {
-					openedCalled = true
-					assert.Equal(record.name, n)
+				options = GateOptions{
+					Name: "test",
 				}
 
-				closedCalled bool
-				closed       = func(n string) {
-					closedCalled = true
-					assert.Equal(record.name, n)
-				}
+				actualOnOpen   []int
+				expectedOnOpen []int
+
+				actualOnClosed   []int
+				expectedOnClosed []int
 			)
 
-			assert.Equal(record.name, record.gate.Name())
-			assert.True(record.gate.IsOpen())
-			assert.NotEmpty(record.gate.String())
+			for i := 0; i < count; i++ {
+				i := i
 
-			record.gate.Append(GateHook{}) // nop
-			assert.True(record.gate.IsOpen())
+				expectedOnOpen = append(expectedOnOpen, i)
+				expectedOnClosed = append(expectedOnClosed, i)
 
-			record.gate.Append(GateHook{
-				OnOpen:   opened,
-				OnClosed: closed,
-			})
+				options.OnOpen = append(options.OnOpen, func(actual *Gate) {
+					actualOnOpen = append(actualOnOpen, i)
+					assert.Equal("test", actual.Name())
+				})
 
-			assert.True(record.gate.IsOpen())
-			assert.True(openedCalled)
-			assert.False(closedCalled)
+				options.OnClosed = append(options.OnClosed, func(actual *Gate) {
+					actualOnClosed = append(actualOnClosed, i)
+					assert.Equal("test", actual.Name())
+				})
+			}
 
-			openedCalled = false
-			closedCalled = false
-			assert.True(record.gate.Close())
-			assert.False(openedCalled)
-			assert.True(closedCalled)
+			g := NewGate(options)
+			require.NotNil(g)
+			assert.True(g.IsOpen())
+			assert.Contains(g.String(), gateOpenText)
 
-			openedCalled = false
-			closedCalled = false
-			assert.False(record.gate.Close())
-			assert.False(openedCalled)
-			assert.False(closedCalled)
+			// initial callbacks should be called
+			assert.Equal(expectedOnOpen, actualOnOpen)
+			assert.Empty(actualOnClosed)
 
-			openedCalled = false
-			closedCalled = false
-			assert.True(record.gate.Open())
-			assert.True(openedCalled)
-			assert.False(closedCalled)
+			// Open should be idempotent
+			actualOnOpen = nil
+			actualOnClosed = nil
+			assert.False(g.Open())
+			assert.True(g.IsOpen())
+			assert.Contains(g.String(), gateOpenText)
+			assert.Empty(actualOnOpen)
+			assert.Empty(actualOnClosed)
 
-			openedCalled = false
-			closedCalled = false
-			assert.False(record.gate.Open())
-			assert.False(openedCalled)
-			assert.False(closedCalled)
+			// close callbacks should be called
+			actualOnOpen = nil
+			actualOnClosed = nil
+			assert.True(g.Close())
+			assert.False(g.IsOpen())
+			assert.Contains(g.String(), gateClosedText)
+			assert.Empty(actualOnOpen)
+			assert.Equal(expectedOnClosed, actualOnClosed)
 
-			// test the case where the gate is closed when Append is called
-			assert.True(record.gate.Close())
-			openedCalled = false
-			closedCalled = false
-			record.gate.Append(GateHook{
-				OnClosed: closed,
-			})
-			assert.False(openedCalled)
-			assert.True(closedCalled)
+			// Close should be idempotent
+			actualOnOpen = nil
+			actualOnClosed = nil
+			assert.False(g.Close())
+			assert.False(g.IsOpen())
+			assert.Contains(g.String(), gateClosedText)
+			assert.Empty(actualOnOpen)
+			assert.Empty(actualOnClosed)
+		})
+	}
+}
+
+func testGateCallbacksInitiallyClosed(t *testing.T) {
+	for _, count := range []int{0, 1, 2, 5} {
+		t.Run(fmt.Sprintf("count=%d", count), func(t *testing.T) {
+			var (
+				assert  = assert.New(t)
+				require = require.New(t)
+
+				options = GateOptions{
+					Name:            "test",
+					InitiallyClosed: true,
+				}
+
+				actualOnOpen   []int
+				expectedOnOpen []int
+
+				actualOnClosed   []int
+				expectedOnClosed []int
+			)
+
+			for i := 0; i < count; i++ {
+				i := i
+
+				expectedOnOpen = append(expectedOnOpen, i)
+				expectedOnClosed = append(expectedOnClosed, i)
+
+				options.OnOpen = append(options.OnOpen, func(actual *Gate) {
+					actualOnOpen = append(actualOnOpen, i)
+					assert.Equal("test", actual.Name())
+				})
+
+				options.OnClosed = append(options.OnClosed, func(actual *Gate) {
+					actualOnClosed = append(actualOnClosed, i)
+					assert.Equal("test", actual.Name())
+				})
+			}
+
+			g := NewGate(options)
+			require.NotNil(g)
+			assert.False(g.IsOpen())
+			assert.Contains(g.String(), gateClosedText)
+
+			// initial callbacks should be called
+			assert.Empty(actualOnOpen)
+			assert.Equal(expectedOnClosed, actualOnClosed)
+
+			// Close should be idempotent
+			actualOnOpen = nil
+			actualOnClosed = nil
+			assert.False(g.Close())
+			assert.False(g.IsOpen())
+			assert.Contains(g.String(), gateClosedText)
+			assert.Empty(actualOnOpen)
+			assert.Empty(actualOnClosed)
+
+			// open callbacks should be called
+			actualOnOpen = nil
+			actualOnClosed = nil
+			assert.True(g.Open())
+			assert.True(g.IsOpen())
+			assert.Contains(g.String(), gateOpenText)
+			assert.Equal(expectedOnOpen, actualOnOpen)
+			assert.Empty(actualOnClosed)
+
+			// Open should be idempotent
+			actualOnOpen = nil
+			actualOnClosed = nil
+			assert.False(g.Open())
+			assert.True(g.IsOpen())
+			assert.Contains(g.String(), gateOpenText)
+			assert.Empty(actualOnOpen)
+			assert.Empty(actualOnClosed)
 		})
 	}
 }
 
 func testGateThen(t *testing.T) {
 	testData := []struct {
-		name               string
-		gate               *Gate
+		options            GateOptions
 		expectedClosedCode int
 	}{
 		{
-			name:               "",
-			gate:               NewGate(),
+			options:            GateOptions{},
 			expectedClosedCode: http.StatusServiceUnavailable,
 		},
 		{
-			name:               "test",
-			gate:               NewGateCustom("test", ConstantHandler{StatusCode: http.StatusNotFound}),
+			options: GateOptions{
+				Name:          "test",
+				ClosedHandler: ConstantHandler{StatusCode: http.StatusNotFound},
+			},
 			expectedClosedCode: http.StatusNotFound,
 		},
 	}
@@ -124,21 +188,23 @@ func testGateThen(t *testing.T) {
 					response.WriteHeader(217)
 				})
 
-				decorated = record.gate.Then(handler)
+				g = NewGate(record.options)
 			)
 
+			require.NotNil(g)
+			decorated := g.Then(handler)
 			require.NotNil(decorated)
 
 			response := httptest.NewRecorder()
 			decorated.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
 			assert.Equal(217, response.Code)
 
-			assert.True(record.gate.Close())
+			assert.True(g.Close())
 			response = httptest.NewRecorder()
 			decorated.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
 			assert.Equal(record.expectedClosedCode, response.Code)
 
-			assert.True(record.gate.Open())
+			assert.True(g.Open())
 			response = httptest.NewRecorder()
 			decorated.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
 			assert.Equal(217, response.Code)
@@ -148,18 +214,18 @@ func testGateThen(t *testing.T) {
 
 func testGateRoundTrip(t *testing.T) {
 	testData := []struct {
-		name               string
-		gate               *Gate
+		options            GateOptions
 		expectedClosedCode int
 	}{
 		{
-			name:               "",
-			gate:               NewGate(),
+			options:            GateOptions{},
 			expectedClosedCode: http.StatusServiceUnavailable,
 		},
 		{
-			name:               "test",
-			gate:               NewGateCustom("test", ConstantHandler{StatusCode: http.StatusNotFound}),
+			options: GateOptions{
+				Name:          "test",
+				ClosedHandler: ConstantHandler{StatusCode: http.StatusNotFound},
+			},
 			expectedClosedCode: http.StatusNotFound,
 		},
 	}
@@ -176,9 +242,11 @@ func testGateRoundTrip(t *testing.T) {
 					}, nil
 				})
 
-				decorated = record.gate.RoundTrip(roundTripper)
+				g = NewGate(record.options)
 			)
 
+			require.NotNil(g)
+			decorated := g.RoundTrip(roundTripper)
 			require.NotNil(decorated)
 
 			response, err := decorated.RoundTrip(httptest.NewRequest("GET", "/", nil))
@@ -186,16 +254,16 @@ func testGateRoundTrip(t *testing.T) {
 			require.NotNil(response)
 			assert.Equal(238, response.StatusCode)
 
-			assert.True(record.gate.Close())
+			assert.True(g.Close())
 			response, err = decorated.RoundTrip(httptest.NewRequest("GET", "/", nil))
 			require.Error(err)
 			assert.Nil(response)
 			assert.NotEmpty(err.Error())
 			closedErr, ok := err.(*GateClosedError)
 			require.True(ok)
-			assert.Equal(record.gate, closedErr.Gate)
+			assert.Equal(g, closedErr.Gate)
 
-			assert.True(record.gate.Open())
+			assert.True(g.Open())
 			response, err = decorated.RoundTrip(httptest.NewRequest("GET", "/", nil))
 			assert.NoError(err)
 			require.NotNil(response)
@@ -209,7 +277,7 @@ func testGateDefaultTransport(t *testing.T) {
 		assert  = assert.New(t)
 		require = require.New(t)
 
-		g = NewGate()
+		g = NewGate(GateOptions{})
 	)
 
 	require.NotNil(g)
@@ -229,7 +297,11 @@ func testGateDefaultTransport(t *testing.T) {
 }
 
 func TestGate(t *testing.T) {
-	t.Run("Append", testGateAppend)
+	t.Run("Callbacks", func(t *testing.T) {
+		t.Run("InitiallyOpen", testGateCallbacksInitiallyOpen)
+		t.Run("InitiallyClosed", testGateCallbacksInitiallyClosed)
+	})
+
 	t.Run("Then", testGateThen)
 	t.Run("RoundTrip", testGateRoundTrip)
 	t.Run("DefaultTransport", testGateDefaultTransport)

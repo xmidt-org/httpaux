@@ -3,6 +3,7 @@ package httpaux
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -31,24 +32,32 @@ func (gce *GateClosedError) Error() string {
 	return fmt.Sprintf("Gate [%s] closed", gce.Gate.Name())
 }
 
-// GateHook is a tuple of callbacks for Gate state.
-//
-// At least (1) callback is required, or an attempt to register the hook
-// will be a nop.
-type GateHook struct {
-	// OnOpen is the callback for when a gate is open.  This callback
-	// is passed Gate.Name().
-	//
-	// OnOpen callbacks are executed under a mutex so that state changes
-	// are seen atomically.  Implementation should return in a timely fashion.
-	OnOpen func(string)
+// GateOptions describes all the various configurable settings for creating a Gate
+type GateOptions struct {
+	// Name is an optional identifier for this gate.  The Gate itself does not make
+	// use of this value.  It's purely for distinguishing gates when an application
+	// uses more than one (1) gate.
+	Name string
 
-	// OnClosed is the callback for when a gate is closed.  This callback
-	// is passed Gate.Name().
-	//
-	// OnClosed callbacks are executed under a mutex so that state changes
-	// are seen atomically.  Implementation should return in a timely fashion.
-	OnClosed func(string)
+	// ClosedHandler is the optional http.Handler that handles requests when
+	// the gate is closed.  If this field is unset, then the only response information
+	// written is a status code of http.StatusServiceUnavailable.
+	ClosedHandler http.Handler
+
+	// InitiallyClosed indicates the state of a Gate when it is created.  The default
+	// is to create a Gate that is open.  If this field is true, the Gate is created
+	// in the closed state.
+	InitiallyClosed bool
+
+	// OnOpen is the set of callbacks to invoke when a gate's state changes to open.
+	// These callbacks will also be invoked when a Gate is created if the Gate is
+	// initially open.
+	OnOpen []func(*Gate)
+
+	// OnClosed is the set of callbacks to invoke when a gate's state changes to closed.
+	// These callbacks will also be invoked when a Gate is created if the Gate is
+	// initially closed.
+	OnClosed []func(*Gate)
 }
 
 // Gate is an atomic boolean that controls access to http.Handlers and http.RoundTrippers.
@@ -57,36 +66,56 @@ type GateHook struct {
 // A Gate can be observed via the Append method and supplying callbacks for state.  These
 // callbacks are useful for integrating logging, metrics, health checks, etc.
 type Gate struct {
-	name     string
-	onClosed http.Handler
+	name          string
+	closedHandler http.Handler
 
-	stateLock         sync.Mutex
-	value             uint32
-	onOpenCallbacks   []func(string)
-	onClosedCallbacks []func(string)
+	value     uint32
+	stateLock sync.Mutex
+	onOpen    []func(*Gate)
+	onClosed  []func(*Gate)
 }
 
-// NewGate creates an unnamed Gate instance that returns http.StatusServiceUnavailable
-// anytime the gate is closed.
-func NewGate() *Gate {
-	return NewGateCustom("", nil)
-}
+// NewGate produces a Gate from a set of options.  The returned Gate will be in
+// the state indicated by GateOptions.InitiallyClosed.
+func NewGate(o GateOptions) *Gate {
+	g := &Gate{
+		name: o.Name,
+	}
 
-// NewGateCustom allows more control over the Gate creation.  It allows a name
-// and a custom http.Handler that is invoked when the Gate is closed.
-//
-// If onClosed is nil, http.StatusServiceUnavailable is returned anytime the gate is closed.
-func NewGateCustom(name string, onClosed http.Handler) *Gate {
-	if onClosed == nil {
-		onClosed = ConstantHandler{
+	if o.ClosedHandler != nil {
+		g.closedHandler = o.ClosedHandler
+	} else {
+		g.closedHandler = ConstantHandler{
 			StatusCode: http.StatusServiceUnavailable,
 		}
 	}
 
-	return &Gate{
-		name:     name,
-		onClosed: onClosed,
+	if o.InitiallyClosed {
+		g.value = gateClosed
 	}
+
+	// we want the Gate to be completely immutable in all ways except
+	// for its atomic value.  so, make safe copies of callbacks.
+	if len(o.OnOpen) > 0 {
+		g.onOpen = append([]func(*Gate){}, o.OnOpen...)
+	}
+
+	if len(o.OnClosed) > 0 {
+		g.onClosed = append([]func(*Gate){}, o.OnClosed...)
+	}
+
+	// only invoke callbacks after everything is fully initialized
+	if g.value == gateOpen {
+		for _, f := range g.onOpen {
+			f(g)
+		}
+	} else {
+		for _, f := range g.onClosed {
+			f(g)
+		}
+	}
+
+	return g
 }
 
 // Name returns the name for this gate, which can be empty.  Typically,
@@ -102,7 +131,13 @@ func (g *Gate) String() string {
 		stateText = gateOpenText
 	}
 
-	return fmt.Sprintf("gate[%s]:%s", g.name, stateText)
+	var b strings.Builder
+	b.Grow(8 + len(stateText) + len(g.name))
+	b.WriteString("gate[")
+	b.WriteString(g.name)
+	b.WriteString("]: ")
+	b.WriteString(stateText)
+	return b.String()
 }
 
 // IsOpen returns the current state of the gate: true for open and false for closed.
@@ -113,7 +148,6 @@ func (g *Gate) IsOpen() bool {
 // Open atomically opens this gate and invokes any registered OnOpen callbacks.  If the
 // gate was already open, no callbacks are invoked since there was no state change.
 func (g *Gate) Open() (opened bool) {
-	// avoid the lock if no state change will occur
 	if atomic.LoadUint32(&g.value) == gateOpen {
 		return
 	}
@@ -122,8 +156,8 @@ func (g *Gate) Open() (opened bool) {
 	g.stateLock.Lock()
 	opened = atomic.CompareAndSwapUint32(&g.value, gateClosed, gateOpen)
 	if opened {
-		for _, c := range g.onOpenCallbacks {
-			c(g.name)
+		for _, f := range g.onOpen {
+			f(g)
 		}
 	}
 
@@ -133,7 +167,6 @@ func (g *Gate) Open() (opened bool) {
 // Close atomically closes this gate and invokes any registered OnClose callbacks.  If the
 // gate was already closed, no callbacks are invoked since there was no state change.
 func (g *Gate) Close() (closed bool) {
-	// avoid the lock if no state change will occur
 	if atomic.LoadUint32(&g.value) == gateClosed {
 		return
 	}
@@ -142,43 +175,12 @@ func (g *Gate) Close() (closed bool) {
 	g.stateLock.Lock()
 	closed = atomic.CompareAndSwapUint32(&g.value, gateOpen, gateClosed)
 	if closed {
-		for _, c := range g.onClosedCallbacks {
-			c(g.name)
+		for _, f := range g.onClosed {
+			f(g)
 		}
 	}
 
 	return
-}
-
-// Append adds a hook to this gate's state.  If the given hook has no
-// callbacks, this method does nothing.
-//
-// Immediately on calling the method, the appropriate callback (if set)
-// is called to notify the infrastructure of the current state.  For example,
-// if this method is called on an open gate and there is an OnOpen callback,
-// then that OnOpen callback will be invoked.
-func (g *Gate) Append(h GateHook) {
-	if h.OnOpen == nil && h.OnClosed == nil {
-		return // nop
-	}
-
-	defer g.stateLock.Unlock()
-	g.stateLock.Lock()
-
-	open := g.IsOpen()
-	if h.OnOpen != nil {
-		g.onOpenCallbacks = append(g.onOpenCallbacks, h.OnOpen)
-		if open {
-			h.OnOpen(g.name)
-		}
-	}
-
-	if h.OnClosed != nil {
-		g.onClosedCallbacks = append(g.onClosedCallbacks, h.OnClosed)
-		if !open {
-			h.OnClosed(g.name)
-		}
-	}
 }
 
 // Then is a server middleware that guards its next http.Handler according
@@ -189,7 +191,7 @@ func (g *Gate) Then(next http.Handler) http.Handler {
 			next.ServeHTTP(response, request)
 		}
 
-		g.onClosed.ServeHTTP(response, request)
+		g.closedHandler.ServeHTTP(response, request)
 	})
 }
 
