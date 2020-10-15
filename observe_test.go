@@ -1,4 +1,4 @@
-package httpbuddy
+package httpaux
 
 import (
 	"bufio"

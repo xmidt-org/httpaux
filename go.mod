@@ -1,4 +1,4 @@
-module github.com/xmidt-org/httpbuddy
+module github.com/xmidt-org/httpaux
 
 go 1.14
 
