@@ -1,6 +1,6 @@
 # httpaux
 
-httpaux does something good.
+The missing functionality from `net/http`
 
 [![Build Status](https://travis-ci.com/xmidt-org/httpaux.svg?branch=main)](https://travis-ci.com/xmidt-org/httpaux)
 [![codecov.io](http://codecov.io/github/xmidt-org/httpaux/coverage.svg?branch=main)](http://codecov.io/github/xmidt-org/httpaux?branch=main)
@@ -14,28 +14,30 @@ httpaux does something good.
 
 ## Summary
 
-Search and replace httpaux with your project name. Summary should be a 
-small paragraph explanation of what this project does.
+httpaux augments golang's `net/http` package with a few extra goodies:
+
+- `RoundTripperFunc` type that implements http.RoundTripper.  This is an analog to http.HandlerFunc for clients.
+- `Busy` server middleware that constrains the number of concurrent requests by consulting a `Limiter` strategy
+- `ObservableWriter` which decorates the typical `http.ResponseWriter`, providing visibility into what handlers have written to the response.  This type is intended to enable other middleware such as logging and metrics.
+- `Gate` middleware for both servers and clients which can explicity shut off code.  One typical use case for this is putting an application into maintenance mode.
+- `Header` immutable data structure that is much more efficient in situations where the same set of headers are iterated over repeatedly.  Useful when static headers need to be placed unconditionally on every request or response.
+- `ConstantHandler` which returns a statically specified set of information in every response
+- `Error` which can be used to wrap service and middleware errors in a form that makes rendering responses easier.  This type is compatible with frameworks like `go-kit`.
 
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
-- [Details](#details)
 - [Install](#install)
 - [Contributing](#contributing)
 
 ## Code of Conduct
 
-This project and everyone participating in it are governed by the [XMiDT Code Of Conduct](https://xmidt.io/code_of_conduct/). 
+This project and everyone participating in it are governed by the [XMiDT Code Of Conduct](https://xmidt.io/code_of_conduct/).
 By participating, you agree to this Code.
-
-## Details
-
-Add details here.
 
 ## Install
 
-Add details here.
+go get github.com/xmidt-org/httpaux
 
 ## Contributing
 
