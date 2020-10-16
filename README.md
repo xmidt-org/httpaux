@@ -10,8 +10,7 @@ The missing functionality from `net/http`
 [![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/xmidt-org/httpaux/blob/main/LICENSE)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xmidt-org_httpaux&metric=alert_status)](https://sonarcloud.io/dashboard?id=xmidt-org_httpaux)
 [![GitHub release](https://img.shields.io/github/release/xmidt-org/httpaux.svg)](CHANGELOG.md)
-[![GoDoc](https://godoc.org/github.com/xmidt-org/httpaux?status.svg)](https://godoc.org/github.com/xmidt-org/httpaux)
-
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/xmidt-org/httpaux)](https://pkg.go.dev/github.com/xmidt-org/httpaux)
 ## Summary
 
 httpaux augments golang's `net/http` package with a few extra goodies:
