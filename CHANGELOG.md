@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Moved gate functionality to a subpackage
+- Support task-based gate decoration
 
 ## [v0.1.0]
 - Busy server middleware for controlling http.Handler concurrency
