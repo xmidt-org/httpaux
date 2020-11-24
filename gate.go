@@ -18,13 +18,24 @@ var (
 	gateClosedText = "closed"
 )
 
-// GateClosedError is returned by decorated http.RoundTripper instances
+// GateStatus is implemented by anything that can check an atomic boolean.
+// Gate implements this interface.
+type GateStatus interface {
+	// Name is an optional identifier for this atomic boolean.  No guarantees
+	// as to uniqueness are made.  This value is completely up to client configuration.
+	Name() string
+
+	// IsOpen checks if this instance is open and thus allowing traffic
+	IsOpen() bool
+}
+
+// GateClosedError is returned by any decorated infrastructure
 // to indicate that the gate disallowed the client request.
 type GateClosedError struct {
 	// Gate is the gate instance that was closed at the time the attempt
 	// to make a request was made.  Note that after this error returns, the
 	// gate may be open.
-	Gate *Gate
+	Gate GateStatus
 }
 
 // Error satisfies the error interface
@@ -39,11 +50,6 @@ type GateOptions struct {
 	// uses more than one (1) gate.
 	Name string
 
-	// ClosedHandler is the optional http.Handler that handles requests when
-	// the gate is closed.  If this field is unset, then the only response information
-	// written is a status code of http.StatusServiceUnavailable.
-	ClosedHandler http.Handler
-
 	// InitiallyClosed indicates the state of a Gate when it is created.  The default
 	// is to create a Gate that is open.  If this field is true, the Gate is created
 	// in the closed state.
@@ -52,27 +58,23 @@ type GateOptions struct {
 	// OnOpen is the set of callbacks to invoke when a gate's state changes to open.
 	// These callbacks will also be invoked when a Gate is created if the Gate is
 	// initially open.
-	OnOpen []func(*Gate)
+	OnOpen []func(GateStatus)
 
 	// OnClosed is the set of callbacks to invoke when a gate's state changes to closed.
 	// These callbacks will also be invoked when a Gate is created if the Gate is
 	// initially closed.
-	OnClosed []func(*Gate)
+	OnClosed []func(GateStatus)
 }
 
-// Gate is an atomic boolean that controls access to http.Handlers and http.RoundTrippers.
+// Gate is an atomic boolean intended to control traffic in or out of a service.
 // All methods of this type are safe for concurrent access.
-//
-// A Gate can be observed via the Append method and supplying callbacks for state.  These
-// callbacks are useful for integrating logging, metrics, health checks, etc.
 type Gate struct {
-	name          string
-	closedHandler http.Handler
+	name string
 
 	value     uint32
 	stateLock sync.Mutex
-	onOpen    []func(*Gate)
-	onClosed  []func(*Gate)
+	onOpen    []func(GateStatus)
+	onClosed  []func(GateStatus)
 }
 
 // NewGate produces a Gate from a set of options.  The returned Gate will be in
@@ -82,14 +84,6 @@ func NewGate(o GateOptions) *Gate {
 		name: o.Name,
 	}
 
-	if o.ClosedHandler != nil {
-		g.closedHandler = o.ClosedHandler
-	} else {
-		g.closedHandler = ConstantHandler{
-			StatusCode: http.StatusServiceUnavailable,
-		}
-	}
-
 	if o.InitiallyClosed {
 		g.value = gateClosed
 	}
@@ -97,11 +91,11 @@ func NewGate(o GateOptions) *Gate {
 	// we want the Gate to be completely immutable in all ways except
 	// for its atomic value.  so, make safe copies of callbacks.
 	if len(o.OnOpen) > 0 {
-		g.onOpen = append([]func(*Gate){}, o.OnOpen...)
+		g.onOpen = append([]func(GateStatus){}, o.OnOpen...)
 	}
 
 	if len(o.OnClosed) > 0 {
-		g.onClosed = append([]func(*Gate){}, o.OnClosed...)
+		g.onClosed = append([]func(GateStatus){}, o.OnClosed...)
 	}
 
 	// only invoke callbacks after everything is fully initialized
@@ -183,36 +177,65 @@ func (g *Gate) Close() (closed bool) {
 	return
 }
 
-// Then is a server middleware that guards its next http.Handler according
-// to the gate's state.
-func (g *Gate) Then(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if g.IsOpen() {
-			next.ServeHTTP(response, request)
-		}
+// GatedHandler is an http.Handler decorator that controls traffic to a given handler
+// based upon the state of a gate.
+type GatedHandler struct {
+	// Next is the required http.Handler being gated.  This handler is only invoked
+	// when the gate is open.
+	Next http.Handler
 
-		g.closedHandler.ServeHTTP(response, request)
-	})
+	// Closed is the optional http.Handler to be invoked when the gate is closed.  This
+	// handler may perform any custom logic desired.  If this field is unset, then
+	// http.StatusServiceUnavailable is written to the response when the gate is closed.
+	Closed http.Handler
+
+	// GateStatus is the required controlling atomic boolean
+	Gate GateStatus
 }
 
-// RoundTrip is a client middleware that guards its next http.RoundTripper
-// according to the gate's state.  If next is nil, http.DefaultTransport is
-// decorated instead.
-//
-// The onClosed http.Handler associated with this gate is not used for
-// this middleware.  If the gate disallows the client request, a nil *http.Response
-// together with a *GateClosedError are returned.
-func (g *Gate) RoundTrip(next http.RoundTripper) http.RoundTripper {
-	// keep a similar default behavior to other packages
-	if next == nil {
-		next = http.DefaultTransport
+// ServeHTTP invokes the Next handler if the gate status is open.  If the gate is closed and
+// there is a Closed handler set, that handler is invoked.  Otherwise, http.StatusServiceUnavailable
+// is written to the response.
+func (gh GatedHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	switch {
+	case gh.Gate.IsOpen():
+		gh.Next.ServeHTTP(response, request)
+
+	case gh.Closed != nil:
+		gh.Closed.ServeHTTP(response, request)
+
+	default:
+		response.WriteHeader(http.StatusServiceUnavailable)
 	}
+}
 
-	return RoundTripperFunc(func(request *http.Request) (*http.Response, error) {
-		if g.IsOpen() {
-			return next.RoundTrip(request)
-		}
+// GatedRoundTripper is an http.RoundTripper implementation that controls access to
+// another round tripper based upon gate status.
+type GatedRoundTripper struct {
+	// Next is the required round tripper being controlled.  If this field is unset,
+	Next http.RoundTripper
 
-		return nil, &GateClosedError{Gate: g}
-	})
+	// Closed is the optional round tripper that is invoked instead of Next when the
+	// gate is closed.  If this method is not set, then a nil response and a GateClosedError
+	// are returned by RoundTrip.
+	Closed http.RoundTripper
+
+	// Gate is the required atomic boolean which controls access to Next
+	Gate GateStatus
+}
+
+// RoundTrip invokes the next round tripper if the gate status is open.  If the gate is
+// closed and the Closed field is set, then the Closed round tripper is invoked.  Otherwise,
+// a nil response and a GateClosedError are returned.
+func (grt GatedRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	switch {
+	case grt.Gate.IsOpen():
+		return grt.Next.RoundTrip(request)
+
+	case grt.Closed != nil:
+		return grt.Closed.RoundTrip(request)
+
+	default:
+		return nil, &GateClosedError{Gate: grt.Gate}
+	}
 }
