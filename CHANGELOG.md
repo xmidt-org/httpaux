@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 - Moved gate functionality to a subpackage
-- Support task-based gate decoration
+- Added a configurable gate control handler
 
 ## [v0.1.0]
 - Busy server middleware for controlling http.Handler concurrency
