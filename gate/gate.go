@@ -1,9 +1,7 @@
 package httpaux
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,35 +43,24 @@ type Control interface {
 	Close() bool
 }
 
-// Tasker provides decoration for background tasks
-type Tasker interface {
-	// Then is a task-based middleware that gates a function.  The returned function
-	// invokes the original if and only if the gate is open.  Otherwise, a ClosedError is returned.
-	//
-	// This middleware is useful for spawned goroutines that should be protected
-	// by a gate.
-	Then(next func(context.Context) error) func(context.Context) error
-}
-
 // Interface represents a gate.  Instances are created via New.
 type Interface interface {
 	Status
 	Control
-	Tasker
 }
 
 // ClosedError is returned by any decorated infrastructure to indicate that the gate
 // disallowed the client request.
 type ClosedError struct {
-	// Status represents the gate instance that was closed at the time of the error.
+	// Gate represents the gate instance that was closed at the time of the error.
 	// Note that this gate may have been opened in the time that a caller waited on
 	// the call to produce this error.
-	Status Status
+	Gate Status
 }
 
 // Error satisfies the error interface
 func (ce *ClosedError) Error() string {
-	return fmt.Sprintf("Gate [%s] closed", ce.Status.Name())
+	return fmt.Sprintf("Gate [%s] closed", ce.Gate.Name())
 }
 
 // Callbacks is a convenient slice type for sequences of gate status callbacks
@@ -200,118 +187,4 @@ func (g *gate) Close() (closed bool) {
 	}
 
 	return
-}
-
-func (g *gate) Then(task func(context.Context) error) func(context.Context) error {
-	return func(ctx context.Context) error {
-		if g.IsOpen() {
-			return task(ctx)
-		}
-
-		return &ClosedError{Status: g}
-	}
-}
-
-// ControlHandler is an http.Handler that allows HTTP requests to open or close a gate
-type ControlHandler struct {
-	// ShouldOpen is the required strategy for determining if an HTTP request
-	// indicates that the gate should be opened.  If this closure returns false,
-	// then the gate is closed.
-	ShouldOpen func(*http.Request) bool
-
-	// Control is the required gate control instance used to open and close the gate
-	Control Control
-}
-
-// ServeHTTP invokes ShouldOpen to determine whether to open or close the gate
-func (ch ControlHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if ch.ShouldOpen(request) {
-		ch.Control.Open()
-	} else {
-		ch.Control.Close()
-	}
-}
-
-// ServerMiddleware provides http.Handler decoration controlled by a gate
-type ServerMiddleware struct {
-	// Closed is the optional http.Handler to be invoked when the gate is closed.  This
-	// handler may perform any custom logic desired.  If this field is unset, then
-	// http.StatusServiceUnavailable is written to the response when the gate is closed.
-	Closed http.Handler
-
-	// Status is the required controlling atomic boolean
-	Status Status
-}
-
-// Then is a serverside middleware function that decorates next such that it is controled via the Status
-// instance.  The Closed field, if set, is invoked anytime the gate is closed.
-func (sm ServerMiddleware) Then(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		switch {
-		case sm.Status.IsOpen():
-			next.ServeHTTP(response, request)
-
-		case sm.Closed != nil:
-			sm.Closed.ServeHTTP(response, request)
-
-		default:
-			response.WriteHeader(http.StatusServiceUnavailable)
-		}
-	})
-}
-
-// ClientMiddleware provides http.RoundTripper decoration controlled by a gate
-type ClientMiddleware struct {
-	// Closed is the optional round tripper that is invoked instead of Next when the
-	// gate is closed.  If this method is not set, then a nil response and a GateClosedError
-	// are returned by RoundTrip.
-	Closed http.RoundTripper
-
-	// Gate is the required atomic boolean which controls access to Next
-	Status Status
-}
-
-// Then is a clientside middleware function that gates an http.RoundTripper.  The returned
-// round tripper always provides a CloseIdleConnections method.  If next also supplies a
-// CloseIdleConnections method, it is invoked as part of the decorator.  Otherwise, the decorator's
-// CloseIdleConnections method does nothing.
-func (cm ClientMiddleware) Then(next http.RoundTripper) http.RoundTripper {
-	if next == nil {
-		next = http.DefaultTransport
-	}
-
-	return &roundTripper{
-		next:   next,
-		closed: cm.Closed,
-		status: cm.Status,
-	}
-}
-
-type roundTripper struct {
-	next   http.RoundTripper
-	closed http.RoundTripper
-	status Status
-}
-
-func (rt *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	switch {
-	case rt.status.IsOpen():
-		return rt.next.RoundTrip(request)
-
-	case rt.closed != nil:
-		return rt.closed.RoundTrip(request)
-
-	default:
-		return nil, &ClosedError{Status: rt.status}
-	}
-}
-
-func (rt *roundTripper) CloseIdleConnections() {
-	type closeIdler interface {
-		CloseIdleConnections()
-	}
-
-	if ci, ok := rt.next.(closeIdler); ok {
-		ci.CloseIdleConnections()
-	}
 }
