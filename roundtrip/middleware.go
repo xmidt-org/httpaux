@@ -2,17 +2,6 @@ package roundtrip
 
 import "net/http"
 
-// Func is a function that that implements http.RoundTripper.  This type is mainly
-// useful in testing, since it doesn't allow for CloseIdleConnections behavior.
-type Func func(*http.Request) (*http.Response, error)
-
-// RoundTrip invokes this function and returns the results
-func (f Func) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
-}
-
-var _ http.RoundTripper = Func(nil)
-
 // Middleware is the interface implemented by components which can apply
 // decoration to http.RoundTrippers.  Both Constructor and Chain
 // implement this interface.
@@ -23,35 +12,6 @@ type Middleware interface {
 }
 
 // Constructor applies clientside middleware to an http.RoundTripper.
-//
-// IMPORTANT: If a constructor returns an http.RoundTripper that does not provide
-// a CloseIdleConnections method, then the http.Client.CloseIdleConnections will not be
-// able to close idle connections when using that http.RoundTripper.  The Chain
-// type handles this case by exposing the CloseIdleConnections method of the original
-// http.RoundTripper in the case where constructors do not decorate CloseIdleConnections.
-// The CloseIdleConnections function of this package allows individual constructors to
-// preserve this behavior.
-//
-// For example:
-//
-//   // the http.RoundTripper returned by this constructor hides any CloseIdleConnections
-//   // implementation in next
-//   func Simple(next http.RoundTripper) http.RoundTripper {
-//     return roundtrip.Func(func(request *http.Request) (*http.Response, error) {
-//       // etc
-//     })
-//   }
-//
-//   // the returned http.RoundTripper preserves any CloseIdleConnections behavior in
-//   // next, despite this constructor not being concerned with that method
-//   func PreservesCloseIdleConnections(next http.RoundTripper) http.RoundTripper {
-//     return roundtrip.CloseIdleConnections(
-//       next,
-//       roundtrip.Func(func(*http.Request) (*http.Respnse, error) {
-//         // etc
-//       }),
-//     )
-//   }
 //
 // https://pkg.go.dev/net/http#Client.CloseIdleConnections
 type Constructor func(http.RoundTripper) http.RoundTripper
@@ -119,7 +79,7 @@ func (c Chain) Then(next http.RoundTripper) http.RoundTripper {
 			// a mix of constructors, some decorating that method and others not,
 			// then we make sure CloseIdleConnections visits each decorator that
 			// cares about that behavior
-			next = CloseIdleConnections(next, c.c[i](next))
+			next = PreserveCloseIdler(next, c.c[i](next))
 		}
 	}
 
