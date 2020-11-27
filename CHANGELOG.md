@@ -6,7 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 - Moved gate functionality to a subpackage
-- Added a configurable gate control handler
+- Configurable gate control handler
+- Client middleware
+- Preserve CloseIdleConnections in decorated http.RoundTripper instances
 
 ## [v0.1.0]
 - Busy server middleware for controlling http.Handler concurrency
