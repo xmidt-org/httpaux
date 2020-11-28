@@ -92,6 +92,13 @@ func (h Header) SetTo(dst http.Header) {
 // Then is a server middleware that adds all the headers to the http.ResponseWriter
 // prior to invoking the next handler.  As an optimization, if this Header is empty
 // no decoration is done.
+//
+// This method can be used as part of server middle with libraries like justinas/alice:
+//
+//   h := roundtrip.NewHeader("Header", "Value")
+//   c := alice.New(
+//     h.Then,
+//   )
 func (h Header) Then(next http.Handler) http.Handler {
 	if len(h.names) > 0 {
 		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -120,6 +127,13 @@ func (hrt headerRoundTripper) RoundTrip(request *http.Request) (*http.Response, 
 // is empty no decoration is done.  Next is returned as is in that case.
 //
 // If next is nil and this Header is non-empty, then http.DefaultTransport is decorated.
+//
+// This method can be used as a roundtrip.Constructor or as part of a roundtrip.Chain:
+//
+//   h := httpaux.Header("Header", "Value")
+//   c := roundtrip.NewChain(
+//     h.RoundTrip,
+//   )
 func (h Header) RoundTrip(next http.RoundTripper) http.RoundTripper {
 	if len(h.names) > 0 {
 		if next == nil {

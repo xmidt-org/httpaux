@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xmidt-org/httpaux/httpmock"
 )
 
 func testHeaderSetTo(t *testing.T, h Header, expected http.Header) {
@@ -46,22 +47,19 @@ func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
 		assert  = assert.New(t)
 		require = require.New(t)
 
-		roundTripper = RoundTripperFunc(func(request *http.Request) (*http.Response, error) {
-			assert.Equal(expected, request.Header)
-			return &http.Response{
-				StatusCode: 284,
-			}, nil
-		})
-
+		next      = new(httpmock.RoundTripper)
 		request   = httptest.NewRequest("GET", "/", nil)
-		decorated = h.RoundTrip(roundTripper)
+		decorated = h.RoundTrip(next)
 	)
 
+	next.OnRoundTrip(request).Return(&http.Response{StatusCode: 284}, nil).Once()
 	require.NotNil(decorated)
 	response, err := decorated.RoundTrip(request)
 	require.NotNil(response)
 	assert.Equal(284, response.StatusCode)
 	assert.NoError(err)
+
+	next.AssertExpectations(t)
 }
 
 func testHeaderRoundTripDefault(t *testing.T) {

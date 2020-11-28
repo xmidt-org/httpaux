@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/xmidt-org/httpaux/httpmock"
 )
 
 func TestConstructor(t *testing.T) {
@@ -39,7 +40,7 @@ type ChainTestSuite struct {
 
 func (suite *ChainTestSuite) TestUninitialized() {
 	var (
-		next  = new(mockRoundTripper)
+		next  = new(httpmock.RoundTripper)
 		chain Chain
 
 		decorator = chain.Then(next)
@@ -52,7 +53,7 @@ func (suite *ChainTestSuite) TestUninitialized() {
 
 func (suite *ChainTestSuite) TestEmpty() {
 	var (
-		next  = new(mockRoundTripper)
+		next  = new(httpmock.RoundTripper)
 		chain = NewChain()
 
 		decorator = chain.Then(next)
@@ -65,7 +66,7 @@ func (suite *ChainTestSuite) TestEmpty() {
 
 func (suite *ChainTestSuite) TestAppend() {
 	var (
-		next    = new(mockRoundTripper)
+		next    = new(httpmock.RoundTripper)
 		called  []int
 		initial = NewChain(
 			func(next http.RoundTripper) http.RoundTripper {
@@ -105,7 +106,7 @@ func (suite *ChainTestSuite) TestAppend() {
 
 func (suite *ChainTestSuite) TestExtend() {
 	var (
-		next    = new(mockRoundTripper)
+		next    = new(httpmock.RoundTripper)
 		called  []int
 		initial = NewChain(
 			func(next http.RoundTripper) http.RoundTripper {
@@ -163,7 +164,7 @@ func (suite *ChainTestSuite) TestThenNoCloseIdler() {
 		}
 		err = errors.New("expected no CloseIdler error")
 
-		next   = new(mockRoundTripper)
+		next   = new(httpmock.RoundTripper)
 		called []int
 		chain  = NewChain(
 			func(next http.RoundTripper) http.RoundTripper {
@@ -183,7 +184,7 @@ func (suite *ChainTestSuite) TestThenNoCloseIdler() {
 
 	decorator := chain.Then(next)
 	suite.Require().NotNil(decorator)
-	next.On("RoundTrip", request).Once().Return(response, err)
+	next.OnRoundTrip(request).Once().Return(response, err)
 
 	actual, actualErr := decorator.RoundTrip(request)
 	suite.Equal(response, actual)
@@ -203,7 +204,7 @@ func (suite *ChainTestSuite) TestThenCloseIdler() {
 		}
 		err = errors.New("expected CloseIdler error")
 
-		next   = new(mockRoundTripperCloseIdler)
+		next   = new(httpmock.CloseIdler)
 		called []int
 		chain  = NewChain(
 			func(next http.RoundTripper) http.RoundTripper {
@@ -223,8 +224,8 @@ func (suite *ChainTestSuite) TestThenCloseIdler() {
 
 	decorator := chain.Then(next)
 	suite.Require().NotNil(decorator)
-	next.On("RoundTrip", request).Once().Return(response, err)
-	next.On("CloseIdleConnections").Once()
+	next.OnRoundTrip(request).Once().Return(response, err)
+	next.OnCloseIdleConnections().Once()
 
 	actual, actualErr := decorator.RoundTrip(request)
 	suite.Equal(response, actual)

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Configurable gate control handler
 - Client middleware
 - Preserve CloseIdleConnections in decorated http.RoundTripper instances
+- httpmock package now has convenient stretchr/testify/mock integrations
 
 ## [v0.1.0]
 - Busy server middleware for controlling http.Handler concurrency
