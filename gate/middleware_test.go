@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/xmidt-org/httpaux"
+	"github.com/xmidt-org/httpaux/roundtrip"
 )
 
 type ServerCustomTestSuite struct {
@@ -105,7 +105,7 @@ var _ suite.TearDownAllSuite = (*ClientCustomTestSuite)(nil)
 
 func (suite *ClientCustomTestSuite) SetupSuite() {
 	suite.customClosedErr = errors.New("expected closed error")
-	suite.closed = httpaux.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
+	suite.closed = roundtrip.Func(func(*http.Request) (*http.Response, error) {
 		return nil, suite.customClosedErr
 	})
 
