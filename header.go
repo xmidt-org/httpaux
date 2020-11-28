@@ -92,6 +92,13 @@ func (h Header) SetTo(dst http.Header) {
 // Then is a server middleware that adds all the headers to the http.ResponseWriter
 // prior to invoking the next handler.  As an optimization, if this Header is empty
 // no decoration is done.
+//
+// This method can be used as part of server middle with libraries like justinas/alice:
+//
+//   h := roundtrip.NewHeader("Header", "Value")
+//   c := alice.New(
+//     h.Then,
+//   )
 func (h Header) Then(next http.Handler) http.Handler {
 	if len(h.names) > 0 {
 		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
