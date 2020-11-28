@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/xmidt-org/httpaux/httpmock"
 )
 
 func TestFunc(t *testing.T) {
@@ -51,14 +52,14 @@ type CloseIdleConnectionsTestSuite struct {
 }
 
 func (suite *CloseIdleConnectionsTestSuite) TestRoundTripper() {
-	m := new(mockRoundTripper)
+	m := new(httpmock.RoundTripper)
 	CloseIdleConnections(m)
 	m.AssertExpectations(suite.T())
 }
 
 func (suite *CloseIdleConnectionsTestSuite) TestCloseIdler() {
-	m := new(mockRoundTripperCloseIdler)
-	m.On("CloseIdleConnections").Once()
+	m := new(httpmock.CloseIdler)
+	m.OnCloseIdleConnections().Once()
 	CloseIdleConnections(m)
 	m.AssertExpectations(suite.T())
 }
@@ -90,7 +91,7 @@ func (suite *PreserveCloseIdlerTestSuite) BeforeTest(_, testName string) {
 
 func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 	var (
-		next      = new(mockRoundTripper)
+		next      = new(httpmock.RoundTripper)
 		decorator = PreserveCloseIdler(
 			next,
 			Func(func(r *http.Request) (*http.Response, error) {
@@ -100,7 +101,7 @@ func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.On("RoundTrip", suite.request).Once().Return(suite.response, suite.err)
+	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
 
 	response, err := decorator.RoundTrip(suite.request)
 	suite.Equal(suite.response, response)
@@ -114,8 +115,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 
 func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 	var (
-		next       = new(mockRoundTripper)
-		closeIdler = new(mockRoundTripperCloseIdler)
+		next       = new(httpmock.RoundTripper)
+		closeIdler = new(httpmock.CloseIdler)
 
 		decorator = PreserveCloseIdler(
 			next,
@@ -129,8 +130,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.On("RoundTrip", suite.request).Once().Return(suite.response, suite.err)
-	closeIdler.On("CloseIdleConnections").Once()
+	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	closeIdler.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
 	suite.Equal(suite.response, response)
@@ -145,7 +146,7 @@ func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 
 func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 	var (
-		next      = new(mockRoundTripperCloseIdler)
+		next      = new(httpmock.CloseIdler)
 		decorator = PreserveCloseIdler(
 			next,
 			Func(func(r *http.Request) (*http.Response, error) {
@@ -155,8 +156,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.On("RoundTrip", suite.request).Once().Return(suite.response, suite.err)
-	next.On("CloseIdleConnections").Once()
+	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	next.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
 	suite.Equal(suite.response, response)
@@ -170,8 +171,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 
 func (suite *PreserveCloseIdlerTestSuite) TestNextDecorator() {
 	var (
-		next       = new(mockRoundTripper)
-		closeIdler = new(mockRoundTripperCloseIdler)
+		next       = new(httpmock.RoundTripper)
+		closeIdler = new(httpmock.CloseIdler)
 
 		decorator = PreserveCloseIdler(
 			Decorator{
@@ -185,8 +186,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextDecorator() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.On("RoundTrip", suite.request).Once().Return(suite.response, suite.err)
-	closeIdler.On("CloseIdleConnections").Once()
+	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	closeIdler.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
 	suite.Equal(suite.response, response)
