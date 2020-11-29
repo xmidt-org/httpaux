@@ -37,7 +37,8 @@ type ResponseBody interface {
 	ContentLength() int64
 }
 
-// Writer is the decorator interface for instrumented http.ResponseWriter instances
+// Writer is the decorator interface for instrumented http.ResponseWriter instances.
+// Instances of this interface are created with New to decorate an existing response writer.
 type Writer interface {
 	http.ResponseWriter
 	StatusCoder
@@ -295,6 +296,16 @@ var decorators = [16]func(*responseWriterDecorator) Writer{
 
 // New decorates an http.ResponseWriter to produces a Writer
 // If the delegate is already an Writer, it is returned as is.
+//
+// There are several interfaces in net/http that an http.ResponseWriter
+// may optionally implement.  If the delegate implements any of those
+// interfaces, the returned observable writer will as well.  The supported
+// optional interfaces are:
+//
+//   - http.Pusher
+//   - http.Flusher
+//   - http.Hijacker
+//   - io.ReaderFrom
 func New(delegate http.ResponseWriter) Writer {
 	if ow, ok := delegate.(Writer); ok {
 		return ow
