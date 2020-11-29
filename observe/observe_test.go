@@ -1,4 +1,4 @@
-package httpaux
+package observe
 
 import (
 	"bufio"
@@ -10,8 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 // simpleRecorder is an http.ResponseWriter that implements none of the
@@ -93,14 +92,14 @@ type decorateCase struct {
 	response http.ResponseWriter
 }
 
-// newDecorateCases builds are test data records, since we can't statically define them.
-// these have to be built programmatically
+// newDecorateCases is factored out into its own function due to complexity.
+// right now, only (1) test needs these cases
 func newDecorateCases() (cases []decorateCase) {
 	// no decoration
 	{
 		recorder := new(simpleRecorder)
 		cases = append(cases, decorateCase{
-			name:     "NoDecoration",
+			name:     "None",
 			verifier: new(decorateVerifier),
 			recorder: recorder,
 			response: recorder,
@@ -352,144 +351,131 @@ func newDecorateCases() (cases []decorateCase) {
 	return
 }
 
-func testObserveDecoration(t *testing.T) {
+type NewTestSuite struct {
+	suite.Suite
+	cases []decorateCase
+}
+
+func (suite *NewTestSuite) TestDecoration() {
 	for _, testCase := range newDecorateCases() {
-		t.Run(testCase.name, func(t *testing.T) {
-			var (
-				assert  = assert.New(t)
-				require = require.New(t)
-
-				decorated = Observe(testCase.response)
-			)
-
-			require.NotNil(decorated)
+		suite.Run(testCase.name, func() {
+			decorated := New(testCase.response)
+			suite.Require().NotNil(decorated)
 
 			decorated.Header().Set("Test", "true")
 			decorated.WriteHeader(298)
 			decorated.Write([]byte("test"))
 
-			assert.Equal(298, testCase.recorder.Code)
-			assert.Equal(http.Header{"Test": {"true"}}, testCase.recorder.HeaderMap)
-			assert.Equal("test", testCase.recorder.Body.String())
-			assert.Equal(298, decorated.StatusCode())
-			assert.Equal(int64(4), decorated.ContentLength())
+			suite.Equal(298, testCase.recorder.Code)
+			suite.Equal(http.Header{"Test": {"true"}}, testCase.recorder.HeaderMap)
+			suite.Equal("test", testCase.recorder.Body.String())
+			suite.Equal(298, decorated.StatusCode())
+			suite.Equal(int64(4), decorated.ContentLength())
 
 			if p, ok := decorated.(http.Pusher); ok {
 				opts := &http.PushOptions{Method: "GET"}
-				assert.NoError(p.Push("test", opts))
-				assert.Equal("test", testCase.verifier.target)
-				assert.Equal(opts, testCase.verifier.opts)
+				suite.NoError(p.Push("test", opts))
+				suite.Equal("test", testCase.verifier.target)
+				suite.Equal(opts, testCase.verifier.opts)
 			}
 
 			if f, ok := decorated.(http.Flusher); ok {
 				f.Flush()
-				assert.True(testCase.verifier.flushCalled)
+				suite.True(testCase.verifier.flushCalled)
 			}
 
 			if h, ok := decorated.(http.Hijacker); ok {
 				h.Hijack()
-				assert.True(testCase.verifier.hijackCalled)
+				suite.True(testCase.verifier.hijackCalled)
 			}
 
 			if rf, ok := decorated.(io.ReaderFrom); ok {
 				testCase.recorder.Body.Reset()
 				c, err := rf.ReadFrom(strings.NewReader("read from"))
-				assert.NoError(err)
-				assert.Equal(len("read from"), int(c))
+				suite.NoError(err)
+				suite.Equal(len("read from"), int(c))
 
-				assert.Equal("read from", testCase.verifier.readFrom.String())
+				suite.Equal("read from", testCase.verifier.readFrom.String())
 			}
 		})
 	}
 }
 
-func testObserveNoDecoration(t *testing.T) {
+func (suite *NewTestSuite) TestNoDecoration() {
 	var (
-		assert  = assert.New(t)
-		require = require.New(t)
-
 		response  = httptest.NewRecorder()
-		decorated = Observe(response)
+		decorated = New(response)
 	)
 
-	require.NotNil(decorated)
+	suite.Require().NotNil(decorated)
 
-	again := Observe(decorated)
-	require.NotNil(again)
-	assert.True(decorated == again)
+	again := New(decorated)
+	suite.Require().NotNil(again)
+	suite.True(decorated == again)
 }
 
-func testObserveWriteWithoutWriteHeader(t *testing.T) {
+func (suite *NewTestSuite) TestWriteWithoutWriteHeader() {
 	var (
-		assert  = assert.New(t)
-		require = require.New(t)
-
 		response = httptest.NewRecorder()
 
 		onWriteHeaderCalled bool
 		onWriteHeader       = func(statusCode int) {
 			onWriteHeaderCalled = true
-			assert.Equal(http.StatusOK, statusCode)
+			suite.Equal(http.StatusOK, statusCode)
 		}
 
-		decorated = Observe(response)
+		decorated = New(response)
 	)
 
-	require.NotNil(decorated)
+	suite.Require().NotNil(decorated)
 	decorated.OnWriteHeader(onWriteHeader)
-	assert.False(onWriteHeaderCalled)
+	suite.False(onWriteHeaderCalled)
 
 	decorated.Write([]byte("test"))
-	assert.Equal(http.StatusOK, response.Code)
-	assert.Equal("test", response.Body.String())
-	assert.Equal(http.StatusOK, decorated.StatusCode())
-	assert.True(onWriteHeaderCalled)
+	suite.Equal(http.StatusOK, response.Code)
+	suite.Equal("test", response.Body.String())
+	suite.Equal(http.StatusOK, decorated.StatusCode())
+	suite.True(onWriteHeaderCalled)
 
 	// since WriteHeader was implicitly called, any new callbacks
 	// should be invoked immediately
 	onWriteHeaderCalled = false
 	decorated.OnWriteHeader(onWriteHeader)
-	assert.True(onWriteHeaderCalled)
+	suite.True(onWriteHeaderCalled)
 }
 
-func testObserveFlushWithoutWriteHeader(t *testing.T) {
+func (suite *NewTestSuite) TestFlushWithoutWriteHeader() {
 	var (
-		assert  = assert.New(t)
-		require = require.New(t)
-
 		response = httptest.NewRecorder()
 
 		onWriteHeaderCalled bool
 		onWriteHeader       = func(statusCode int) {
 			onWriteHeaderCalled = true
-			assert.Equal(http.StatusOK, statusCode)
+			suite.Equal(http.StatusOK, statusCode)
 		}
 
-		decorated = Observe(response)
+		decorated = New(response)
 	)
 
-	require.NotNil(decorated)
+	suite.Require().NotNil(decorated)
 	decorated.OnWriteHeader(onWriteHeader)
-	assert.False(onWriteHeaderCalled)
+	suite.False(onWriteHeaderCalled)
 
 	decorated.(http.Flusher).Flush()
-	assert.Equal(http.StatusOK, response.Code)
-	assert.Equal(http.StatusOK, decorated.StatusCode())
-	assert.True(response.Flushed)
-	assert.True(onWriteHeaderCalled)
+	suite.Equal(http.StatusOK, response.Code)
+	suite.Equal(http.StatusOK, decorated.StatusCode())
+	suite.True(response.Flushed)
+	suite.True(onWriteHeaderCalled)
 
 	// since WriteHeader was implicitly called, any new callbacks
 	// should be invoked immediately
 	onWriteHeaderCalled = false
 	decorated.OnWriteHeader(onWriteHeader)
-	assert.True(onWriteHeaderCalled)
+	suite.True(onWriteHeaderCalled)
 }
 
-func testObserveReadFromWithoutWriteHeader(t *testing.T) {
+func (suite *NewTestSuite) TestReadFromWithoutWriteHeader() {
 	var (
-		assert  = assert.New(t)
-		require = require.New(t)
-
 		verifier = new(decorateVerifier)
 		response = struct {
 			*simpleRecorder
@@ -502,34 +488,30 @@ func testObserveReadFromWithoutWriteHeader(t *testing.T) {
 		onWriteHeaderCalled bool
 		onWriteHeader       = func(statusCode int) {
 			onWriteHeaderCalled = true
-			assert.Equal(http.StatusOK, statusCode)
+			suite.Equal(http.StatusOK, statusCode)
 		}
 
-		decorated = Observe(response)
+		decorated = New(response)
 	)
 
-	require.NotNil(decorated)
+	suite.Require().NotNil(decorated)
 	decorated.OnWriteHeader(onWriteHeader)
-	assert.False(onWriteHeaderCalled)
+	suite.False(onWriteHeaderCalled)
 
 	decorated.(io.ReaderFrom).ReadFrom(strings.NewReader("test"))
-	assert.Equal(http.StatusOK, response.Code)
-	assert.Equal("test", verifier.readFrom.String())
-	assert.Equal(http.StatusOK, decorated.StatusCode())
-	assert.Equal(int64(4), decorated.ContentLength())
-	assert.True(onWriteHeaderCalled)
+	suite.Equal(http.StatusOK, response.Code)
+	suite.Equal("test", verifier.readFrom.String())
+	suite.Equal(http.StatusOK, decorated.StatusCode())
+	suite.Equal(int64(4), decorated.ContentLength())
+	suite.True(onWriteHeaderCalled)
 
 	// since WriteHeader was implicitly called, any new callbacks
 	// should be invoked immediately
 	onWriteHeaderCalled = false
 	decorated.OnWriteHeader(onWriteHeader)
-	assert.True(onWriteHeaderCalled)
+	suite.True(onWriteHeaderCalled)
 }
 
-func TestObserve(t *testing.T) {
-	t.Run("Decoration", testObserveDecoration)
-	t.Run("NoDecoration", testObserveNoDecoration)
-	t.Run("WriteWithoutWriteHeader", testObserveWriteWithoutWriteHeader)
-	t.Run("FlushWithoutWriteHeader", testObserveFlushWithoutWriteHeader)
-	t.Run("ReadFromWithoutWriteHeader", testObserveReadFromWithoutWriteHeader)
+func TestNew(t *testing.T) {
+	suite.Run(t, new(NewTestSuite))
 }

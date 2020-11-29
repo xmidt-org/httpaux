@@ -1,4 +1,4 @@
-package httpaux
+package observe
 
 import (
 	"bufio"
@@ -37,8 +37,9 @@ type ResponseBody interface {
 	ContentLength() int64
 }
 
-// ObservableWriter is the decorator interface for instrumented http.ResponseWriter instances
-type ObservableWriter interface {
+// Writer is the decorator interface for instrumented http.ResponseWriter instances.
+// Instances of this interface are created with New to decorate an existing response writer.
+type Writer interface {
 	http.ResponseWriter
 	StatusCoder
 	ResponseBody
@@ -164,27 +165,27 @@ const (
 
 // decorators is an array of factories that decorate the base responseWriterDecorator
 // Each index in this array is a bit mask consisting of the types to decorate
-var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
+var decorators = [16]func(*responseWriterDecorator) Writer{
 	// 0000 - no decoration
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return rwd
 	},
 	// 0001 - http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Pusher
 		}{rwd, pusherDecorator{rwd}}
 	},
 	// 0010 - http.Flusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Flusher
 		}{rwd, flusherDecorator{rwd}}
 	},
 	// 0011 - http.Flusher, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Flusher
@@ -192,14 +193,14 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, flusherDecorator{rwd}, pusherDecorator{rwd}}
 	},
 	// 0100 - http.Hijacker
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Hijacker
 		}{rwd, hijackerDecorator{rwd}}
 	},
 	// 0101 - http.Hijacker, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Hijacker
@@ -207,7 +208,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, hijackerDecorator{rwd}, pusherDecorator{rwd}}
 	},
 	// 0110 - http.Hijacker, http.Flusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Hijacker
@@ -215,7 +216,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, hijackerDecorator{rwd}, flusherDecorator{rwd}}
 	},
 	// 0111 - http.Hijacker, http.Flusher, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			http.Hijacker
@@ -224,14 +225,14 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, hijackerDecorator{rwd}, flusherDecorator{rwd}, pusherDecorator{rwd}}
 	},
 	// 1000 - io.ReaderFrom
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
 		}{rwd, readerFromDecorator{rwd}}
 	},
 	// 1001 - io.ReaderFrom, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -239,7 +240,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, readerFromDecorator{rwd}, pusherDecorator{rwd}}
 	},
 	// 1010 - io.ReaderFrom, http.Flusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -247,7 +248,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, readerFromDecorator{rwd}, flusherDecorator{rwd}}
 	},
 	// 1011 - io.ReaderFrom, http.Flusher, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -256,7 +257,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, readerFromDecorator{rwd}, flusherDecorator{rwd}, pusherDecorator{rwd}}
 	},
 	// 1100 - io.ReaderFrom, http.Hijacker
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -264,7 +265,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, readerFromDecorator{rwd}, hijackerDecorator{rwd}}
 	},
 	// 1101 - io.ReaderFrom, http.Hijacker, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -273,7 +274,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, readerFromDecorator{rwd}, hijackerDecorator{rwd}, pusherDecorator{rwd}}
 	},
 	// 1110 - io.ReaderFrom, http.Hijacker, http.Flusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -282,7 +283,7 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 		}{rwd, readerFromDecorator{rwd}, hijackerDecorator{rwd}, flusherDecorator{rwd}}
 	},
 	// 1111 - io.ReaderFrom, http.Hijacker, http.Flusher, http.Pusher
-	func(rwd *responseWriterDecorator) ObservableWriter {
+	func(rwd *responseWriterDecorator) Writer {
 		return struct {
 			*responseWriterDecorator
 			io.ReaderFrom
@@ -293,10 +294,20 @@ var decorators = [16]func(*responseWriterDecorator) ObservableWriter{
 	},
 }
 
-// Observe decorates an http.ResponseWriter to produces an ObservableWriter
-// If the delegate is already an ObservableWriter, it is returned as is.
-func Observe(delegate http.ResponseWriter) ObservableWriter {
-	if ow, ok := delegate.(ObservableWriter); ok {
+// New decorates an http.ResponseWriter to produces a Writer
+// If the delegate is already an Writer, it is returned as is.
+//
+// There are several interfaces in net/http that an http.ResponseWriter
+// may optionally implement.  If the delegate implements any of those
+// interfaces, the returned observable writer will as well.  The supported
+// optional interfaces are:
+//
+//   - http.Pusher
+//   - http.Flusher
+//   - http.Hijacker
+//   - io.ReaderFrom
+func New(delegate http.ResponseWriter) Writer {
+	if ow, ok := delegate.(Writer); ok {
 		return ow
 	}
 
