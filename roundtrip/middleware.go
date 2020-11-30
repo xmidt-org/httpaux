@@ -1,23 +1,20 @@
 package roundtrip
 
-import "net/http"
+import (
+	"net/http"
 
-// Middleware is the interface implemented by components which can apply
-// decoration to http.RoundTrippers.  Both Constructor and Chain
-// implement this interface.
-type Middleware interface {
-	// Then applies decoration to the given round tripper.  See the note on
-	// Constructor for information about the CloseIdleConnections method.
-	Then(http.RoundTripper) http.RoundTripper
-}
+	"github.com/xmidt-org/httpaux"
+)
 
 // Constructor applies clientside middleware to an http.RoundTripper.
 //
 // https://pkg.go.dev/net/http#Client.CloseIdleConnections
 type Constructor func(http.RoundTripper) http.RoundTripper
 
-// Then implements Middleware
-func (c Constructor) Then(next http.RoundTripper) http.RoundTripper {
+var _ httpaux.ClientMiddleware = (Constructor)(nil)
+
+// Then implements httpaux.ClientMiddleware
+func (c Constructor) ThenRoundTrip(next http.RoundTripper) http.RoundTripper {
 	return c(next)
 }
 
@@ -26,6 +23,8 @@ func (c Constructor) Then(next http.RoundTripper) http.RoundTripper {
 type Chain struct {
 	c []Constructor
 }
+
+var _ httpaux.ClientMiddleware = Chain{}
 
 // NewChain creates a chain from a sequence of constructors.  The constructors
 // are always applied in the order presented here.
@@ -56,7 +55,7 @@ func (c Chain) Extend(more Chain) Chain {
 	return c.Append(more.c...)
 }
 
-// Then applies the given sequence of middleware to the next http.RoundTripper.  In keeping
+// ThenRoundTrip applies the given sequence of middleware to the next http.RoundTripper.  In keeping
 // with the de facto standard with net/http, if next is nil, then http.DefaultTransport
 // is decorated.
 //
@@ -66,7 +65,7 @@ func (c Chain) Extend(more Chain) Chain {
 // method to work properly.
 //
 // See: https://pkg.go.dev/net/http#Client.CloseIdleConnections
-func (c Chain) Then(next http.RoundTripper) http.RoundTripper {
+func (c Chain) ThenRoundTrip(next http.RoundTripper) http.RoundTripper {
 	if len(c.c) > 0 {
 		if next == nil {
 			next = http.DefaultTransport

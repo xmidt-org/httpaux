@@ -1,4 +1,4 @@
-package httpaux
+package busy
 
 import (
 	"net/http"
@@ -63,54 +63,4 @@ func (rcl *MaxRequestLimiter) Check(*http.Request) (RequestDone, bool) {
 	}
 
 	return rcl.release, true
-}
-
-// Busy defines a server middleware that enforces request limiting
-type Busy struct {
-	// Limiter is the concurrent request limiting strategy.  If this field is unset,
-	// then no limiting is done.
-	Limiter Limiter
-
-	// OnBusy is the optional http.Handler to invoke when the maximum number
-	// concurrent requests has been exceeded.  ConstantHandler is a useful choice
-	// for this field, as it allows one to tailor not only the status code but also
-	// the headers and body.
-	//
-	// If this field is nil, this middleware simply returns http.StatusServiceUnavailable.
-	OnBusy http.Handler
-}
-
-// Then is a server middleware that enforces this Busy configuration.  If Limiter is nil,
-// no decoration is done and next is returned as is.  If OnBusy is nil, then the returned
-// handler will simply set http.StatusServiceUnavailable when requests fail the limit check.
-func (b Busy) Then(next http.Handler) http.Handler {
-	if b.Limiter == nil {
-		return next
-	}
-
-	if b.OnBusy == nil {
-		b.OnBusy = ConstantHandler{
-			StatusCode: http.StatusServiceUnavailable,
-		}
-	}
-
-	return &busyHandler{
-		Busy: b,
-		next: next,
-	}
-}
-
-// busyHandler is a decorator around a next handler that enforces a request limit
-type busyHandler struct {
-	Busy
-	next http.Handler
-}
-
-func (bh *busyHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if done, ok := bh.Limiter.Check(request); ok {
-		defer done()
-		bh.next.ServeHTTP(response, request)
-	} else {
-		bh.OnBusy.ServeHTTP(response, request)
-	}
 }
