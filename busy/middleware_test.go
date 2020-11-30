@@ -5,66 +5,77 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"github.com/xmidt-org/httpaux"
 )
 
-func testBusyLimited(t *testing.T, onBusy http.Handler, expectedBusyCode int) {
-	var (
-		assert  = assert.New(t)
-		require = require.New(t)
+type ServerTestSuite struct {
+	suite.Suite
+	decorated http.Handler
+	limiter   *MaxRequestLimiter
+}
 
-		handler = http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			response.WriteHeader(298)
-		})
+var _ suite.SetupTestSuite = (*ServerTestSuite)(nil)
 
-		limiter = &MaxRequestLimiter{
-			MaxRequests: 1,
-		}
+func (suite *ServerTestSuite) SetupTest() {
+	suite.decorated = httpaux.ConstantHandler{
+		StatusCode: 222,
+	}
 
-		decorated = Server{
-			Limiter: limiter,
-			Busy:    onBusy,
-		}.Then(handler)
-	)
+	suite.limiter = &MaxRequestLimiter{
+		MaxRequests: 1,
+	}
+}
 
-	require.NotNil(decorated)
+func (suite *ServerTestSuite) TestLimited() {
+	decorator := Server{
+		Limiter: suite.limiter,
+	}.Then(suite.decorated)
+
+	suite.Require().NotNil(decorator)
 
 	first := httptest.NewRecorder()
-	decorated.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
-	assert.Equal(298, first.Code)
-	assert.Zero(limiter.counter)
+	decorator.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
+	suite.Equal(222, first.Code)
+	suite.Zero(suite.limiter.counter)
 
 	// simulate an overloaded handler
-	limiter.counter = 1
+	suite.limiter.counter = 1
 	second := httptest.NewRecorder()
-	decorated.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
-	assert.Equal(expectedBusyCode, second.Code)
-	assert.Equal(int64(1), limiter.counter)
+	decorator.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
+	suite.Equal(http.StatusServiceUnavailable, second.Code)
+	suite.Equal(int64(1), suite.limiter.counter)
 }
 
-func testBusyUnlimited(t *testing.T) {
-	var (
-		assert  = assert.New(t)
-		require = require.New(t)
+func (suite *ServerTestSuite) TestCustomBusy() {
+	decorator := Server{
+		Limiter: suite.limiter,
+		Busy: httpaux.ConstantHandler{
+			StatusCode: 599,
+		},
+	}.Then(suite.decorated)
 
-		handler   = httpaux.ConstantHandler{StatusCode: 222}
-		decorated = Server{}.Then(handler)
-	)
+	suite.Require().NotNil(decorator)
 
-	require.NotNil(decorated)
-	assert.Equal(handler, decorated)
+	first := httptest.NewRecorder()
+	decorator.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
+	suite.Equal(222, first.Code)
+	suite.Zero(suite.limiter.counter)
+
+	// simulate an overloaded handler
+	suite.limiter.counter = 1
+	second := httptest.NewRecorder()
+	decorator.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
+	suite.Equal(599, second.Code)
+	suite.Equal(int64(1), suite.limiter.counter)
 }
 
-func TestBusy(t *testing.T) {
-	t.Run("Unlimited", testBusyUnlimited)
+func (suite *ServerTestSuite) TestUnlimited() {
+	decorator := Server{}.Then(suite.decorated)
+	suite.Require().NotNil(decorator)
+	suite.Equal(suite.decorated, decorator)
+}
 
-	t.Run("LimitedDefaultBusy", func(t *testing.T) {
-		testBusyLimited(t, nil, http.StatusServiceUnavailable)
-	})
-
-	t.Run("LimitedCustomBusy", func(t *testing.T) {
-		testBusyLimited(t, httpaux.ConstantHandler{StatusCode: 517}, 517)
-	})
+func TestServer(t *testing.T) {
+	suite.Run(t, new(ServerTestSuite))
 }
