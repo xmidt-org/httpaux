@@ -2,12 +2,12 @@ package observe
 
 import "net/http"
 
-type observableHandler struct {
+type observableDecorator struct {
 	next http.Handler
 }
 
-func (oh observableHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	oh.next.ServeHTTP(
+func (od observableDecorator) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	od.next.ServeHTTP(
 		New(response),
 		request,
 	)
@@ -19,11 +19,11 @@ func (oh observableHandler) ServeHTTP(response http.ResponseWriter, request *htt
 // if an http.ResponseWriter is already observable, possibly due to other infrastructure,
 // the returned handler will simply pass the call through to next.
 func Then(next http.Handler) http.Handler {
-	if _, ok := next.(observableHandler); ok {
+	if _, ok := next.(observableDecorator); ok {
 		return next
 	}
 
-	return observableHandler{
+	return observableDecorator{
 		next: next,
 	}
 }
