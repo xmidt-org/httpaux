@@ -297,10 +297,9 @@ var decorators = [16]func(*responseWriterDecorator) Writer{
 // New decorates an http.ResponseWriter to produces a Writer
 // If the delegate is already an Writer, it is returned as is.
 //
-// There are several interfaces in net/http that an http.ResponseWriter
-// may optionally implement.  If the delegate implements any of those
-// interfaces, the returned observable writer will as well.  The supported
-// optional interfaces are:
+// There are several optional interfaces that an http.ResponseWriter
+// may implement.  If the delegate implements any of the following interfaces,
+// the returned observable writer will as well:
 //
 //   - http.Pusher
 //   - http.Flusher
