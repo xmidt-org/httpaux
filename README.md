@@ -13,14 +13,15 @@ The missing functionality from `net/http`
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/xmidt-org/httpaux)](https://pkg.go.dev/github.com/xmidt-org/httpaux)
 ## Summary
 
-httpaux augments golang's `net/http` package with a few extra goodies:
+httpaux augments golang's `net/http` package with a few extra goodies.
 
-- `RoundTripperFunc` that implements http.RoundTripper.  This is an analog to http.HandlerFunc for clients.
-- `Busy` server middleware that constrains the number of concurrent requests by consulting a `Limiter` strategy
-- `ObservableWriter` which decorates the typical `http.ResponseWriter`, providing visibility into what handlers have written to the response.  This type is intended to enable other middleware such as logging and metrics.
-- `Gate` middleware for both servers and clients which can explicity shut off code.  One typical use case for this is putting an application into maintenance mode.
-- `Header` immutable data structure that is much more efficient in situations where the same set of headers are iterated over repeatedly.  Useful when static headers need to be placed unconditionally on every request or response.
-- `ConstantHandler` which returns a statically specified set of information in every response
+- Middleware for clients in the form of http.RoundTripper decoration
+- Standardized middleware interfaces
+- Busy server middleware to limit serverside traffic
+- Observable http.ResponseWriter middleware that provides a standard way for http.Handler decorators to examine what was written to the response by nested handlers
+- Gate middleware to control server and client traffic
+- An efficient, immutable Header type for writing static headers
+- A configurable `ConstantHandler` that writes hardcoded information to responses
 - `Error` which can be used to wrap service and middleware errors in a form that makes rendering responses easier.  This type is compatible with frameworks like `go-kit`.
 
 ## Table of Contents
