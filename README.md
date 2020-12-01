@@ -4,8 +4,6 @@ The missing functionality from `net/http`
 
 [![Build Status](https://travis-ci.com/xmidt-org/httpaux.svg?branch=main)](https://travis-ci.com/xmidt-org/httpaux)
 [![codecov.io](http://codecov.io/github/xmidt-org/httpaux/coverage.svg?branch=main)](http://codecov.io/github/xmidt-org/httpaux?branch=main)
-[![Code Climate](https://codeclimate.com/github/xmidt-org/httpaux/badges/gpa.svg)](https://codeclimate.com/github/xmidt-org/httpaux)
-[![Issue Count](https://codeclimate.com/github/xmidt-org/httpaux/badges/issue_count.svg)](https://codeclimate.com/github/xmidt-org/httpaux)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xmidt-org/httpaux)](https://goreportcard.com/report/github.com/xmidt-org/httpaux)
 [![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/xmidt-org/httpaux/blob/main/LICENSE)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xmidt-org_httpaux&metric=alert_status)](https://sonarcloud.io/dashboard?id=xmidt-org_httpaux)
