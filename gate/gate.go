@@ -233,7 +233,7 @@ func (g *gate) Register(h Hook) {
 
 	if h.OnClosed != nil {
 		g.onClosed = append(g.onClosed, h.OnClosed)
-		if isOpen {
+		if !isOpen {
 			h.OnClosed(g.status)
 		}
 	}
