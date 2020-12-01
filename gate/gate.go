@@ -39,10 +39,16 @@ func (cb callbacks) on(s Status) {
 type Hook struct {
 	// OnOpen is invoked any time a gate is opened.  If a gate is open when this callback
 	// is registered, it will be immediately invoked.
+	//
+	// Note: Callbacks should never modify the gate.  The Status instance passed to all callbacks
+	// is not castable to Control.
 	OnOpen func(Status)
 
 	// OnClose is invoked any time a gate is closed.  If a gate is closed when this
 	// callback is registered, it will be immediately invoked.
+	//
+	// Note: Callbacks should never modify the gate.  The Status instance passed to all callbacks
+	// is not castable to Control.
 	OnClosed func(Status)
 }
 
@@ -50,7 +56,12 @@ type Hook struct {
 type Hooks []Hook
 
 // Status is implemented by anything that can check an atomic boolean.
-// All methods of this interface are safe for concurrent access.
+// All methods of this interface are safe for concurrent access.  None of
+// the methods in this interface mutate the underlying gate.
+//
+// Note: although New returns a type that also implements this interface,
+// Status instances passed to callbacks ARE NOT castable to Control.  This
+// prevents modification of the gate by callbacks.
 type Status interface {
 	// Name is an optional identifier for this atomic boolean.  No guarantees
 	// as to uniqueness are made.  This value is completely up to client configuration.
@@ -65,6 +76,9 @@ type Status interface {
 
 // Control allows a gate to be open and closed atomically.  All methods of this interface
 // are safe for concurrent access.
+//
+// All methods of this interface mutate the underlying gate and thus involve synchronization.
+// In particular, Register is atomic with respect to Open/Close.
 type Control interface {
 	// Open raises this gate to allow traffic.  This method is atomic and idempotent.  It returns
 	// true if there was a state change, false to indicate the gate was already open.
