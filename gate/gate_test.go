@@ -84,9 +84,13 @@ func (suite *GateTestSuite) TestDefaults() {
 
 func (suite *GateTestSuite) TestInitiallyOpen() {
 	gate := New(Config{
-		Name:     suite.gateName,
-		OnOpen:   Callbacks{suite.onOpen},
-		OnClosed: Callbacks{suite.onClosed},
+		Name: suite.gateName,
+		Hooks: Hooks{
+			{
+				OnOpen:   suite.onOpen,
+				OnClosed: suite.onClosed,
+			},
+		},
 	})
 
 	suite.Require().NotNil(gate)
@@ -126,8 +130,12 @@ func (suite *GateTestSuite) TestInitiallyClosed() {
 	gate := New(Config{
 		Name:            suite.gateName,
 		InitiallyClosed: true,
-		OnOpen:          Callbacks{suite.onOpen},
-		OnClosed:        Callbacks{suite.onClosed},
+		Hooks: Hooks{
+			{
+				OnOpen:   suite.onOpen,
+				OnClosed: suite.onClosed,
+			},
+		},
 	})
 
 	suite.Require().NotNil(gate)
@@ -161,6 +169,72 @@ func (suite *GateTestSuite) TestInitiallyClosed() {
 	suite.resetCallbacks()
 
 	suite.Equal(suite.gateName, gate.Name(), "Name should be immutable")
+}
+
+func (suite *GateTestSuite) TestInitiallyEmptyHook() {
+	g := New(Config{
+		Hooks: Hooks{
+			{}, // no callbacks set
+		},
+	})
+
+	suite.T().Log("configured hooks that are empty should have no effect")
+	suite.True(g.Close())
+	suite.True(g.Open())
+}
+
+func (suite *GateTestSuite) TestRegister() {
+	suite.Run("OnOpen", func() {
+		suite.resetCallbacks()
+		g := New(Config{
+			Name: suite.gateName,
+		})
+
+		g.Register(Hook{
+			OnOpen:   suite.onOpen,
+			OnClosed: suite.onClosed,
+		})
+
+		suite.True(suite.onOpenCalled, "Register should invoke OnOpen when the gate is open")
+		suite.False(suite.onClosedCalled, "Register should not invoke OnClosed when the gate is open")
+
+		suite.T().Log("callbacks should work normally after Register")
+		suite.resetCallbacks()
+		suite.True(g.Close())
+		suite.False(suite.onOpenCalled)
+		suite.True(suite.onClosedCalled)
+	})
+
+	suite.Run("OnClosed", func() {
+		suite.resetCallbacks()
+		g := New(Config{
+			Name: suite.gateName,
+		})
+
+		suite.Require().True(g.Close())
+		g.Register(Hook{
+			OnOpen:   suite.onOpen,
+			OnClosed: suite.onClosed,
+		})
+
+		suite.False(suite.onOpenCalled, "Register should not invoke OnOpen when the gate is closed")
+		suite.True(suite.onClosedCalled, "Register should invoke OnClosed when the gate is closed")
+
+		suite.T().Log("callbacks should work normally after Register")
+		suite.resetCallbacks()
+		suite.True(g.Open())
+		suite.True(suite.onOpenCalled)
+		suite.False(suite.onClosedCalled)
+	})
+
+	suite.Run("EmptyHook", func() {
+		g := New(Config{})
+		g.Register(Hook{})
+
+		suite.T().Log("Register should do nothing when passed an empty Hook")
+		suite.True(g.Close())
+		suite.True(g.Open())
+	})
 }
 
 func TestGate(t *testing.T) {

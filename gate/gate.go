@@ -17,8 +17,51 @@ var (
 	gateClosedText = "closed"
 )
 
+// callbacks is a convenient slice type for sequences of gate status callbacks
+type callbacks []func(Status)
+
+func (cb callbacks) appendIfNotNil(f func(Status)) callbacks {
+	if f != nil {
+		return append(cb, f)
+	}
+
+	return cb
+}
+
+// on invokes each callback with the given status
+func (cb callbacks) on(s Status) {
+	for _, f := range cb {
+		f(s)
+	}
+}
+
+// Hook is a tuple of callbacks for gate state
+type Hook struct {
+	// OnOpen is invoked any time a gate is opened.  If a gate is open when this callback
+	// is registered, it will be immediately invoked.
+	//
+	// Note: Callbacks should never modify the gate.  The Status instance passed to all callbacks
+	// is not castable to Control.
+	OnOpen func(Status)
+
+	// OnClose is invoked any time a gate is closed.  If a gate is closed when this
+	// callback is registered, it will be immediately invoked.
+	//
+	// Note: Callbacks should never modify the gate.  The Status instance passed to all callbacks
+	// is not castable to Control.
+	OnClosed func(Status)
+}
+
+// Hooks is a simple slice type for Hook instances
+type Hooks []Hook
+
 // Status is implemented by anything that can check an atomic boolean.
-// All methods of this interface are safe for concurrent access.
+// All methods of this interface are safe for concurrent access.  None of
+// the methods in this interface mutate the underlying gate.
+//
+// Note: although New returns a type that also implements this interface,
+// Status instances passed to callbacks ARE NOT castable to Control.  This
+// prevents modification of the gate by callbacks.
 type Status interface {
 	// Name is an optional identifier for this atomic boolean.  No guarantees
 	// as to uniqueness are made.  This value is completely up to client configuration.
@@ -33,6 +76,9 @@ type Status interface {
 
 // Control allows a gate to be open and closed atomically.  All methods of this interface
 // are safe for concurrent access.
+//
+// All methods of this interface mutate the underlying gate and thus involve synchronization.
+// In particular, Register is atomic with respect to Open/Close.
 type Control interface {
 	// Open raises this gate to allow traffic.  This method is atomic and idempotent.  It returns
 	// true if there was a state change, false to indicate the gate was already open.
@@ -41,6 +87,13 @@ type Control interface {
 	// Close lowers this gate to reject traffic.  This method is atomic and idempotent.  It returns
 	// true if there was a state change, false to indicate the gate was already closed.
 	Close() bool
+
+	// Register adds a tuple of callbacks to this status instance.  If the given Hook
+	// has no callbacks set, this method does nothing.
+	//
+	// Callbacks registered for the current state, e.g. OnOpen registered against an open gate,
+	// will be immediately invoked prior to this method returning.
+	Register(Hook)
 }
 
 // Interface represents a gate.  Instances are created via New.
@@ -63,16 +116,6 @@ func (ce *ClosedError) Error() string {
 	return fmt.Sprintf("Gate [%s] closed", ce.Gate.Name())
 }
 
-// Callbacks is a convenient slice type for sequences of gate status callbacks
-type Callbacks []func(Status)
-
-// On invokes each callback with the given status
-func (cb Callbacks) On(s Status) {
-	for _, f := range cb {
-		f(s)
-	}
-}
-
 // Config describes all the various configurable settings for creating a Gate
 type Config struct {
 	// Name is an optional identifier for this gate.  The Gate itself does not make
@@ -85,105 +128,142 @@ type Config struct {
 	// in the closed state.
 	InitiallyClosed bool
 
-	// OnOpen is the set of callbacks to invoke when a gate's state changes to open.
-	// These callbacks will also be invoked when a Gate is created if the Gate is
-	// initially open.
+	// Hooks is the optional set of preregistered callbacks when a gate is created with this
+	// configuration.  Any empty hooks are silently ignored.
 	//
-	// No callback should ever panic, or later callbacks in this slice will be
-	// short circuited.
-	OnOpen Callbacks
+	// Any callbacks that match the initial state of the gate, e.g. OnOpen when InitiallyClosed
+	// is false, are immediately invoked before New returns.
+	Hooks Hooks
+}
 
-	// OnClosed is the set of callbacks to invoke when a gate's state changes to closed.
-	// These callbacks will also be invoked when a Gate is created if the Gate is
-	// initially closed.
-	//
-	// No callback should ever panic, or later callbacks in this slice will be
-	// short circuited.
-	OnClosed Callbacks
+// status is the internal Status implementation
+type status struct {
+	name  string
+	value uint32
+}
+
+func (s *status) open() bool {
+	return atomic.CompareAndSwapUint32(&s.value, gateClosed, gateOpen)
+}
+
+func (s *status) close() bool {
+	return atomic.CompareAndSwapUint32(&s.value, gateOpen, gateClosed)
+}
+
+func (s *status) Name() string {
+	return s.name
+}
+
+func (s *status) IsOpen() bool {
+	return atomic.LoadUint32(&s.value) == gateOpen
+}
+
+// String returns a human-readable representation of this Gate.
+func (s *status) String() string {
+	stateText := gateClosedText
+	if s.IsOpen() {
+		stateText = gateOpenText
+	}
+
+	var b strings.Builder
+	b.Grow(8 + len(stateText) + len(s.name))
+	b.WriteString("gate[")
+	b.WriteString(s.name)
+	b.WriteString("]: ")
+	b.WriteString(stateText)
+	return b.String()
 }
 
 // gate is the canonical implementation of both Status and Control
 type gate struct {
-	name string
-
-	value     uint32
+	// an embedded instance prevents callbacks from sidecasting to the Control interface
+	*status
 	stateLock sync.Mutex
-	onOpen    Callbacks
-	onClosed  Callbacks
+	onOpen    callbacks
+	onClosed  callbacks
 }
 
 // New produces a gate from a set of options.  The returned instance will be in
 // the state indicated by Config.InitiallyClosed.
 func New(c Config) Interface {
 	g := &gate{
-		name:     c.Name,
-		onOpen:   append(Callbacks{}, c.OnOpen...),
-		onClosed: append(Callbacks{}, c.OnClosed...),
+		status: &status{
+			name: c.Name,
+		},
 	}
+
+	for _, h := range c.Hooks {
+		g.onOpen = g.onOpen.appendIfNotNil(h.OnOpen)
+		g.onClosed = g.onClosed.appendIfNotNil(h.OnClosed)
+	}
+
+	// for consistency with Register, hold the lock while we invoke
+	// any callbacks.  this will cause errant code to deadlock, as it should,
+	// if Register is invoked on the same goroutine as a callback
+	defer g.stateLock.Unlock()
+	g.stateLock.Lock()
 
 	if c.InitiallyClosed {
+		// no need for atomic access here, as no other goroutines accessing
+		// the gate under construction are possible at this point
 		g.value = gateClosed
-	}
-
-	// only invoke callbacks after everything is fully initialized
-	if g.value == gateOpen {
-		g.onOpen.On(g)
+		g.onClosed.on(g.status)
 	} else {
-		g.onClosed.On(g)
+		g.onOpen.on(g.status)
 	}
 
 	return g
 }
 
-func (g *gate) Name() string {
-	return g.name
-}
-
-// String returns a human-readable representation of this Gate.
-func (g *gate) String() string {
-	stateText := gateClosedText
-	if g.IsOpen() {
-		stateText = gateOpenText
-	}
-
-	var b strings.Builder
-	b.Grow(8 + len(stateText) + len(g.name))
-	b.WriteString("gate[")
-	b.WriteString(g.name)
-	b.WriteString("]: ")
-	b.WriteString(stateText)
-	return b.String()
-}
-
-func (g *gate) IsOpen() bool {
-	return atomic.LoadUint32(&g.value) == gateOpen
-}
-
-func (g *gate) Open() (opened bool) {
-	if atomic.LoadUint32(&g.value) == gateOpen {
+func (g *gate) Register(h Hook) {
+	if h.OnOpen == nil && h.OnClosed == nil {
 		return
 	}
 
 	defer g.stateLock.Unlock()
 	g.stateLock.Lock()
-	opened = atomic.CompareAndSwapUint32(&g.value, gateClosed, gateOpen)
+
+	isOpen := g.status.IsOpen()
+	if h.OnOpen != nil {
+		g.onOpen = append(g.onOpen, h.OnOpen)
+		if isOpen {
+			h.OnOpen(g.status)
+		}
+	}
+
+	if h.OnClosed != nil {
+		g.onClosed = append(g.onClosed, h.OnClosed)
+		if !isOpen {
+			h.OnClosed(g.status)
+		}
+	}
+}
+
+func (g *gate) Open() (opened bool) {
+	if g.status.IsOpen() {
+		return
+	}
+
+	defer g.stateLock.Unlock()
+	g.stateLock.Lock()
+	opened = g.status.open()
 	if opened {
-		g.onOpen.On(g)
+		g.onOpen.on(g.status)
 	}
 
 	return
 }
 
 func (g *gate) Close() (closed bool) {
-	if atomic.LoadUint32(&g.value) == gateClosed {
+	if !g.status.IsOpen() {
 		return
 	}
 
 	defer g.stateLock.Unlock()
 	g.stateLock.Lock()
-	closed = atomic.CompareAndSwapUint32(&g.value, gateOpen, gateClosed)
+	closed = g.status.close()
 	if closed {
-		g.onClosed.On(g)
+		g.onClosed.on(g.status)
 	}
 
 	return
