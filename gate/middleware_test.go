@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/xmidt-org/httpaux"
 	"github.com/xmidt-org/httpaux/roundtrip"
 )
 
@@ -26,13 +27,13 @@ var _ suite.SetupAllSuite = (*ServerTestSuite)(nil)
 var _ suite.SetupTestSuite = (*ServerTestSuite)(nil)
 
 func (suite *ServerTestSuite) SetupSuite() {
-	suite.next = http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
-		response.WriteHeader(299)
-	})
+	suite.next = httpaux.ConstantHandler{
+		StatusCode: 299,
+	}
 
-	suite.closed = http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
-		response.WriteHeader(599)
-	})
+	suite.closed = httpaux.ConstantHandler{
+		StatusCode: 599,
+	}
 }
 
 func (suite *ServerTestSuite) SetupTest() {
@@ -42,6 +43,12 @@ func (suite *ServerTestSuite) SetupTest() {
 
 	suite.response = httptest.NewRecorder()
 	suite.request = httptest.NewRequest("GET", "/", nil)
+}
+
+func (suite *ServerTestSuite) TestNilGate() {
+	handler := Server{}.Then(suite.next)
+	suite.Require().NotNil(handler)
+	suite.Equal(suite.next, handler)
 }
 
 func (suite *ServerTestSuite) TestDefaultOpen() {
@@ -154,6 +161,15 @@ func (suite *ClientTestSuite) checkRoundTripper(rt http.RoundTripper) (*http.Res
 	}
 
 	return response, err
+}
+
+func (suite *ClientTestSuite) TestNilGate() {
+	// check that no decoration happened
+	next := new(http.Transport)
+	suite.Equal(
+		next,
+		Client{}.ThenRoundTrip(next),
+	)
 }
 
 func (suite *ClientTestSuite) TestDefaultOpen() {
