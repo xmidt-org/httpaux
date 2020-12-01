@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Preserve CloseIdleConnections in decorated http.RoundTripper instances
 - httpmock package now has convenient stretchr/testify/mock integrations
 - observe is now a subpackage and exposes middleware
+- normalized client and server middleware across the library
+- busy functionality is now in its own package and consistenly named
 
 ## [v0.1.0]
 - Busy server middleware for controlling http.Handler concurrency

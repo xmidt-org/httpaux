@@ -45,7 +45,7 @@ func (suite *ServerCustomTestSuite) SetupTest() {
 }
 
 func (suite *ServerCustomTestSuite) TestDefaultOpen() {
-	handler := Server(suite.gate)(suite.next)
+	handler := Server{Gate: suite.gate}.Then(suite.next)
 	suite.Require().NotNil(handler)
 
 	handler.ServeHTTP(suite.response, suite.request)
@@ -54,7 +54,7 @@ func (suite *ServerCustomTestSuite) TestDefaultOpen() {
 
 func (suite *ServerCustomTestSuite) TestDefaultClosed() {
 	suite.Require().True(suite.gate.Close())
-	handler := Server(suite.gate)(suite.next)
+	handler := Server{Gate: suite.gate}.Then(suite.next)
 	suite.Require().NotNil(handler)
 
 	handler.ServeHTTP(suite.response, suite.request)
@@ -62,7 +62,7 @@ func (suite *ServerCustomTestSuite) TestDefaultClosed() {
 }
 
 func (suite *ServerCustomTestSuite) TestCustomOpen() {
-	handler := ServerCustom{
+	handler := Server{
 		Closed: suite.closed,
 		Gate:   suite.gate,
 	}.Then(suite.next)
@@ -74,7 +74,7 @@ func (suite *ServerCustomTestSuite) TestCustomOpen() {
 
 func (suite *ServerCustomTestSuite) TestCustomClosed() {
 	suite.Require().True(suite.gate.Close())
-	handler := ServerCustom{
+	handler := Server{
 		Closed: suite.closed,
 		Gate:   suite.gate,
 	}.Then(suite.next)
@@ -158,7 +158,7 @@ func (suite *ClientCustomTestSuite) checkRoundTripper(rt http.RoundTripper) (*ht
 
 func (suite *ClientCustomTestSuite) TestDefaultOpen() {
 	suite.Run("WithNext", func() {
-		rt := Client(suite.gate)(new(http.Transport))
+		rt := Client{Gate: suite.gate}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.NoError(err)
@@ -167,7 +167,7 @@ func (suite *ClientCustomTestSuite) TestDefaultOpen() {
 	})
 
 	suite.Run("NilNext", func() {
-		rt := Client(suite.gate)(nil)
+		rt := Client{Gate: suite.gate}.ThenRoundTrip(nil)
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.NoError(err)
@@ -180,7 +180,7 @@ func (suite *ClientCustomTestSuite) TestDefaultClosed() {
 	suite.Require().True(suite.gate.Close())
 
 	suite.Run("WithNext", func() {
-		rt := Client(suite.gate)(new(http.Transport))
+		rt := Client{Gate: suite.gate}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.Nil(response)
@@ -188,7 +188,7 @@ func (suite *ClientCustomTestSuite) TestDefaultClosed() {
 	})
 
 	suite.Run("NilNext", func() {
-		rt := Client(suite.gate)(nil)
+		rt := Client{Gate: suite.gate}.ThenRoundTrip(nil)
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.Nil(response)
@@ -198,10 +198,10 @@ func (suite *ClientCustomTestSuite) TestDefaultClosed() {
 
 func (suite *ClientCustomTestSuite) TestCustomOpen() {
 	suite.Run("WithNext", func() {
-		rt := ClientCustom{
+		rt := Client{
 			Closed: suite.closed,
 			Gate:   suite.gate,
-		}.Then(new(http.Transport))
+		}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.NoError(err)
@@ -210,10 +210,10 @@ func (suite *ClientCustomTestSuite) TestCustomOpen() {
 	})
 
 	suite.Run("NilNext", func() {
-		rt := ClientCustom{
+		rt := Client{
 			Closed: suite.closed,
 			Gate:   suite.gate,
-		}.Then(nil)
+		}.ThenRoundTrip(nil)
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.NoError(err)
@@ -226,10 +226,10 @@ func (suite *ClientCustomTestSuite) TestCustomClosed() {
 	suite.Require().True(suite.gate.Close())
 
 	suite.Run("WithNext", func() {
-		rt := ClientCustom{
+		rt := Client{
 			Closed: suite.closed,
 			Gate:   suite.gate,
-		}.Then(new(http.Transport))
+		}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.Nil(response)
@@ -237,10 +237,10 @@ func (suite *ClientCustomTestSuite) TestCustomClosed() {
 	})
 
 	suite.Run("NilNext", func() {
-		rt := ClientCustom{
+		rt := Client{
 			Closed: suite.closed,
 			Gate:   suite.gate,
-		}.Then(new(http.Transport))
+		}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
 		suite.Nil(response)
