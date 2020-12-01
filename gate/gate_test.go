@@ -84,9 +84,13 @@ func (suite *GateTestSuite) TestDefaults() {
 
 func (suite *GateTestSuite) TestInitiallyOpen() {
 	gate := New(Config{
-		Name:     suite.gateName,
-		OnOpen:   Callbacks{suite.onOpen},
-		OnClosed: Callbacks{suite.onClosed},
+		Name: suite.gateName,
+		Hooks: Hooks{
+			{
+				OnOpen:   suite.onOpen,
+				OnClosed: suite.onClosed,
+			},
+		},
 	})
 
 	suite.Require().NotNil(gate)
@@ -126,8 +130,12 @@ func (suite *GateTestSuite) TestInitiallyClosed() {
 	gate := New(Config{
 		Name:            suite.gateName,
 		InitiallyClosed: true,
-		OnOpen:          Callbacks{suite.onOpen},
-		OnClosed:        Callbacks{suite.onClosed},
+		Hooks: Hooks{
+			{
+				OnOpen:   suite.onOpen,
+				OnClosed: suite.onClosed,
+			},
+		},
 	})
 
 	suite.Require().NotNil(gate)
