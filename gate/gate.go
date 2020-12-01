@@ -204,6 +204,8 @@ func New(c Config) Interface {
 	g.stateLock.Lock()
 
 	if c.InitiallyClosed {
+		// no need for atomic access here, as no other goroutines accessing
+		// the gate under construction are possible at this point
 		g.value = gateClosed
 		g.onClosed.on(g.status)
 	} else {
