@@ -16,7 +16,8 @@ type Server struct {
 	// A convenient, configurable handler for this field is httpaux.ConstantHandler.
 	Closed http.Handler
 
-	// Gate is the required Status that indicates whether a gate allows traffic
+	// Gate is the Status that indicates whether a gate allows traffic.  If this field
+	// is unset, this middleware is a nop.
 	Gate Status
 }
 
@@ -25,6 +26,10 @@ var _ httpaux.ServerMiddleware = Server{}
 // Then decorates a handler so that it is controlled by the Gate field.  Next is required
 // and cannot be nil, or a panic will result.
 func (s Server) Then(next http.Handler) http.Handler {
+	if s.Gate == nil {
+		return next
+	}
+
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
 		case s.Gate.IsOpen():
@@ -47,7 +52,8 @@ type Client struct {
 	// the gate status indicates closed.
 	Closed http.RoundTripper
 
-	// Gate is the required Status that indicates whether a gate allows traffic
+	// Gate is the Status that indicates whether a gate allows traffic.  If this field
+	// is unset, this middleware is a nop.
 	Gate Status
 }
 
@@ -62,7 +68,9 @@ var _ httpaux.ClientMiddleware = Client{}
 // For consistency with other libraries, if next is nil then http.DefaultTransport
 // is used as the decorated round tripper.
 func (c Client) ThenRoundTrip(next http.RoundTripper) http.RoundTripper {
-	if next == nil {
+	if c.Gate == nil {
+		return next
+	} else if next == nil {
 		next = http.DefaultTransport
 	}
 

@@ -12,7 +12,7 @@ import (
 	"github.com/xmidt-org/httpaux/roundtrip"
 )
 
-type ServerCustomTestSuite struct {
+type ServerTestSuite struct {
 	suite.Suite
 	next   http.Handler
 	closed http.Handler
@@ -22,10 +22,10 @@ type ServerCustomTestSuite struct {
 	request  *http.Request
 }
 
-var _ suite.SetupAllSuite = (*ServerCustomTestSuite)(nil)
-var _ suite.SetupTestSuite = (*ServerCustomTestSuite)(nil)
+var _ suite.SetupAllSuite = (*ServerTestSuite)(nil)
+var _ suite.SetupTestSuite = (*ServerTestSuite)(nil)
 
-func (suite *ServerCustomTestSuite) SetupSuite() {
+func (suite *ServerTestSuite) SetupSuite() {
 	suite.next = http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(299)
 	})
@@ -35,7 +35,7 @@ func (suite *ServerCustomTestSuite) SetupSuite() {
 	})
 }
 
-func (suite *ServerCustomTestSuite) SetupTest() {
+func (suite *ServerTestSuite) SetupTest() {
 	suite.gate = New(Config{
 		Name: "testServer",
 	})
@@ -44,7 +44,7 @@ func (suite *ServerCustomTestSuite) SetupTest() {
 	suite.request = httptest.NewRequest("GET", "/", nil)
 }
 
-func (suite *ServerCustomTestSuite) TestDefaultOpen() {
+func (suite *ServerTestSuite) TestDefaultOpen() {
 	handler := Server{Gate: suite.gate}.Then(suite.next)
 	suite.Require().NotNil(handler)
 
@@ -52,7 +52,7 @@ func (suite *ServerCustomTestSuite) TestDefaultOpen() {
 	suite.Equal(299, suite.response.Code)
 }
 
-func (suite *ServerCustomTestSuite) TestDefaultClosed() {
+func (suite *ServerTestSuite) TestDefaultClosed() {
 	suite.Require().True(suite.gate.Close())
 	handler := Server{Gate: suite.gate}.Then(suite.next)
 	suite.Require().NotNil(handler)
@@ -61,7 +61,7 @@ func (suite *ServerCustomTestSuite) TestDefaultClosed() {
 	suite.Equal(http.StatusServiceUnavailable, suite.response.Code)
 }
 
-func (suite *ServerCustomTestSuite) TestCustomOpen() {
+func (suite *ServerTestSuite) TestCustomOpen() {
 	handler := Server{
 		Closed: suite.closed,
 		Gate:   suite.gate,
@@ -72,7 +72,7 @@ func (suite *ServerCustomTestSuite) TestCustomOpen() {
 	suite.Equal(299, suite.response.Code)
 }
 
-func (suite *ServerCustomTestSuite) TestCustomClosed() {
+func (suite *ServerTestSuite) TestCustomClosed() {
 	suite.Require().True(suite.gate.Close())
 	handler := Server{
 		Closed: suite.closed,
@@ -84,11 +84,11 @@ func (suite *ServerCustomTestSuite) TestCustomClosed() {
 	suite.Equal(599, suite.response.Code)
 }
 
-func TestServerCustom(t *testing.T) {
-	suite.Run(t, new(ServerCustomTestSuite))
+func TestServer(t *testing.T) {
+	suite.Run(t, new(ServerTestSuite))
 }
 
-type ClientCustomTestSuite struct {
+type ClientTestSuite struct {
 	suite.Suite
 	server *httptest.Server
 
@@ -99,11 +99,11 @@ type ClientCustomTestSuite struct {
 	request *http.Request
 }
 
-var _ suite.SetupAllSuite = (*ClientCustomTestSuite)(nil)
-var _ suite.SetupTestSuite = (*ClientCustomTestSuite)(nil)
-var _ suite.TearDownAllSuite = (*ClientCustomTestSuite)(nil)
+var _ suite.SetupAllSuite = (*ClientTestSuite)(nil)
+var _ suite.SetupTestSuite = (*ClientTestSuite)(nil)
+var _ suite.TearDownAllSuite = (*ClientTestSuite)(nil)
 
-func (suite *ClientCustomTestSuite) SetupSuite() {
+func (suite *ClientTestSuite) SetupSuite() {
 	suite.customClosedErr = errors.New("expected closed error")
 	suite.closed = roundtrip.Func(func(*http.Request) (*http.Response, error) {
 		return nil, suite.customClosedErr
@@ -114,7 +114,7 @@ func (suite *ClientCustomTestSuite) SetupSuite() {
 	suite.server = httptest.NewServer(mux)
 }
 
-func (suite *ClientCustomTestSuite) SetupTest() {
+func (suite *ClientTestSuite) SetupTest() {
 	suite.gate = New(Config{
 		Name: "testClient",
 	})
@@ -124,15 +124,15 @@ func (suite *ClientCustomTestSuite) SetupTest() {
 	suite.Require().NoError(err)
 }
 
-func (suite *ClientCustomTestSuite) TearDownSuite() {
+func (suite *ClientTestSuite) TearDownSuite() {
 	suite.server.Close()
 }
 
-func (suite *ClientCustomTestSuite) testServerHandle(response http.ResponseWriter, _ *http.Request) {
+func (suite *ClientTestSuite) testServerHandle(response http.ResponseWriter, _ *http.Request) {
 	response.WriteHeader(277)
 }
 
-func (suite *ClientCustomTestSuite) checkRoundTripper(rt http.RoundTripper) (*http.Response, error) {
+func (suite *ClientTestSuite) checkRoundTripper(rt http.RoundTripper) (*http.Response, error) {
 	suite.Require().NotNil(rt)
 
 	type checkCloseIdler interface {
@@ -156,7 +156,7 @@ func (suite *ClientCustomTestSuite) checkRoundTripper(rt http.RoundTripper) (*ht
 	return response, err
 }
 
-func (suite *ClientCustomTestSuite) TestDefaultOpen() {
+func (suite *ClientTestSuite) TestDefaultOpen() {
 	suite.Run("WithNext", func() {
 		rt := Client{Gate: suite.gate}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
@@ -176,7 +176,7 @@ func (suite *ClientCustomTestSuite) TestDefaultOpen() {
 	})
 }
 
-func (suite *ClientCustomTestSuite) TestDefaultClosed() {
+func (suite *ClientTestSuite) TestDefaultClosed() {
 	suite.Require().True(suite.gate.Close())
 
 	suite.Run("WithNext", func() {
@@ -196,7 +196,7 @@ func (suite *ClientCustomTestSuite) TestDefaultClosed() {
 	})
 }
 
-func (suite *ClientCustomTestSuite) TestCustomOpen() {
+func (suite *ClientTestSuite) TestCustomOpen() {
 	suite.Run("WithNext", func() {
 		rt := Client{
 			Closed: suite.closed,
@@ -222,7 +222,7 @@ func (suite *ClientCustomTestSuite) TestCustomOpen() {
 	})
 }
 
-func (suite *ClientCustomTestSuite) TestCustomClosed() {
+func (suite *ClientTestSuite) TestCustomClosed() {
 	suite.Require().True(suite.gate.Close())
 
 	suite.Run("WithNext", func() {
@@ -248,6 +248,6 @@ func (suite *ClientCustomTestSuite) TestCustomClosed() {
 	})
 }
 
-func TestClientCustom(t *testing.T) {
-	suite.Run(t, new(ClientCustomTestSuite))
+func TestClient(t *testing.T) {
+	suite.Run(t, new(ClientTestSuite))
 }
