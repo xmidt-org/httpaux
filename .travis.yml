@@ -58,7 +58,8 @@ jobs:
       name: "Make a Release"
       if: branch != main
       before_script: skip
-      after_success: echo "after_success step"
+      # after_success step needs to run for deploy to run
+      after_success: true
       script: skip
       deploy:
         on:
