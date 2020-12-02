@@ -16,7 +16,7 @@ addons:
   sonarcloud:
     organization: "xmidt-org"
     token:
-      secure: "Rerun 'travis encrypt --pro abcdefg' on the real org token and place the results here."
+      secure: "FxO7hzZO7tODKz6/ekug7ab2a+AE9XxtejAcSOz/+7MuUUJcTS+nrw+kU5AvmxefoIGI/0oQDHhmBla/WPAuJXcnFwx3l5THvpK5eR1gcDyCwQ8sunXcG8w0ZN7ol1T7HHv11vziw/K1wypeQ0tdWdisQ859zHiVVpKAgfrPHilcePxTYLOKu7kBSr/fRNhpIXPEgaoOfBrEIpSqFce0e8KLb1WbKHMmbB1BuWTQcMr80Nomknbv+HbT1faSP5BT32TqeXoUex3WZtKgpkJc8btPaEAWI5UlmQ4xKhQ4NzUrM9NNQelFJtnKukzW0eIDPG3cgTSMk6zWOoUty6yqKYnNGgemkctdO4aP2kDUCteKRDRAQZ/jR2dbpe2HovaLVmbubjGqnStDFsGWg+nagwJDgg1ZloAFGFaGz+Cn6mO3wbq9JxrlSqcDHj0rK1IxZeYqg0X3djpFG6cTcscuELbcWvQGowSKOJi+HLwlko5Pqg42xL8ORFfvi6YqaVWUiuWT3Uafh2fuTzgiqdhVw7X+SMoX0i/+otK88Sg7WBuqe620zoBzYAzskS6KtMwjf1uF504pI9U4rs250vdSM03gG6kitl+42wN6tPBLw97gsB5Mh90FgBLyMxP5U3y2r+IInGT2IbB1bg7KRI2jRfL/Td69SYuxeKm2qE7EAX8="
 
 install:
   - GO111MODULE=on go mod vendor
@@ -57,6 +57,8 @@ jobs:
     - stage: release
       name: "Make a Release"
       if: branch != main
+      before_script: skip
+      after_success: skip
       script: skip
       deploy:
         on:
