@@ -33,6 +33,12 @@ stages:
 
 jobs:
   include:
+    - stage: test
+      name: "Build and Test"
+      addons:
+        sonarcloud:
+          organization: "xmidt-org"
+
     - stage: tag
       name: "Tag For Release"
       if: branch = main && type = push
