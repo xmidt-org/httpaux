@@ -2,7 +2,7 @@
 
 The missing functionality from `net/http`
 
-[![Build Status](https://travis-ci.com/xmidt-org/httpaux.svg?branch=main)](https://travis-ci.com/xmidt-org/httpaux)
+[![Build Status](https://github.com/xmidt-org/httpaux/workflows/CI/badge.svg)](https://github.com/xmidt-org/httpaux/actions)
 [![codecov.io](http://codecov.io/github/xmidt-org/httpaux/coverage.svg?branch=main)](http://codecov.io/github/xmidt-org/httpaux?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xmidt-org/httpaux)](https://goreportcard.com/report/github.com/xmidt-org/httpaux)
 [![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/xmidt-org/httpaux/blob/main/LICENSE)
