@@ -39,7 +39,7 @@ func testHeaderThen(t *testing.T, h Header, expected http.Header) {
 	decorated.ServeHTTP(response, request)
 
 	assert.Equal(271, response.Code)
-	assert.Equal(expected, response.HeaderMap)
+	assert.Equal(expected, response.Result().Header)
 }
 
 func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
