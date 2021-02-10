@@ -22,7 +22,7 @@ func TestFunc(t *testing.T) {
 		f      Func = func(actual *http.Request) (*http.Response, error) {
 			called = true
 			assert.Equal(expected, actual)
-			return &http.Response{StatusCode: 211}, nil
+			return &http.Response{StatusCode: 211, Body: httpmock.EmptyBody()}, nil
 		}
 	)
 
@@ -30,6 +30,7 @@ func TestFunc(t *testing.T) {
 	assert.True(called)
 	assert.NoError(err)
 	require.NotNil(response)
+	defer response.Body.Close()
 	assert.Equal(211, response.StatusCode)
 }
 
@@ -84,6 +85,7 @@ func (suite *PreserveCloseIdlerTestSuite) BeforeTest(_, testName string) {
 		Header: http.Header{
 			"X-Test": {testName},
 		},
+		Body: httpmock.EmptyBody(),
 	}
 
 	suite.err = fmt.Errorf("expected error: %s", testName)
@@ -104,6 +106,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
 
 	response, err := decorator.RoundTrip(suite.request)
+	suite.Require().NotNil(response)
+	defer response.Body.Close()
 	suite.Equal(suite.response, response)
 	suite.Equal(suite.err, err)
 
@@ -134,6 +138,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 	closeIdler.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
+	suite.Require().NotNil(response)
+	defer response.Body.Close()
 	suite.Equal(suite.response, response)
 	suite.Equal(suite.err, err)
 
@@ -160,6 +166,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 	next.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
+	suite.Require().NotNil(response)
+	defer response.Body.Close()
 	suite.Equal(suite.response, response)
 	suite.Equal(suite.err, err)
 
@@ -190,6 +198,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextDecorator() {
 	closeIdler.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
+	suite.Require().NotNil(response)
+	defer response.Body.Close()
 	suite.Equal(suite.response, response)
 	suite.Equal(suite.err, err)
 

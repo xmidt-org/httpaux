@@ -39,7 +39,7 @@ func testHeaderThen(t *testing.T, h Header, expected http.Header) {
 	decorated.ServeHTTP(response, request)
 
 	assert.Equal(271, response.Code)
-	assert.Equal(expected, response.HeaderMap)
+	assert.Equal(expected, response.Result().Header) // nolint:bodyclose
 }
 
 func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
@@ -52,10 +52,11 @@ func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
 		decorated = h.RoundTrip(next)
 	)
 
-	next.OnRoundTrip(request).Return(&http.Response{StatusCode: 284}, nil).Once()
+	next.OnRoundTrip(request).Return(&http.Response{StatusCode: 284, Body: httpmock.EmptyBody()}, nil).Once()
 	require.NotNil(decorated)
 	response, err := decorated.RoundTrip(request)
 	require.NotNil(response)
+	defer response.Body.Close()
 	assert.Equal(284, response.StatusCode)
 	assert.NoError(err)
 

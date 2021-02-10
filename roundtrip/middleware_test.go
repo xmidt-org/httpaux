@@ -161,6 +161,7 @@ func (suite *ChainTestSuite) TestThenNoCloseIdler() {
 		request  = httptest.NewRequest("GET", "/noCloseIdler", nil)
 		response = &http.Response{
 			StatusCode: 674,
+			Body:       httpmock.EmptyBody(),
 		}
 		err = errors.New("expected no CloseIdler error")
 
@@ -187,6 +188,8 @@ func (suite *ChainTestSuite) TestThenNoCloseIdler() {
 	next.OnRoundTrip(request).Once().Return(response, err)
 
 	actual, actualErr := decorator.RoundTrip(request)
+	suite.Require().NotNil(actual)
+	defer actual.Body.Close()
 	suite.Equal(response, actual)
 	suite.Equal(err, actualErr)
 	suite.Equal([]int{0, 1}, called)
@@ -201,6 +204,7 @@ func (suite *ChainTestSuite) TestThenCloseIdler() {
 		request  = httptest.NewRequest("GET", "/closeIdler", nil)
 		response = &http.Response{
 			StatusCode: 722,
+			Body:       httpmock.EmptyBody(),
 		}
 		err = errors.New("expected CloseIdler error")
 
@@ -228,6 +232,8 @@ func (suite *ChainTestSuite) TestThenCloseIdler() {
 	next.OnCloseIdleConnections().Once()
 
 	actual, actualErr := decorator.RoundTrip(request)
+	suite.Require().NotNil(actual)
+	defer actual.Body.Close()
 	suite.Equal(response, actual)
 	suite.Equal(err, actualErr)
 	suite.Equal([]int{0, 1}, called)
