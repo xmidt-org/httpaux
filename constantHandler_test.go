@@ -22,7 +22,7 @@ func testConstantHandlerDefault(t *testing.T) {
 
 	ch.ServeHTTP(response, request)
 	assert.Equal(http.StatusOK, response.Code)
-	assert.Empty(response.Result().Header)
+	assert.Empty(response.Result().Header) // nolint:bodyclose
 	assert.Empty(response.Body.String())
 }
 
@@ -51,7 +51,7 @@ func testConstantHandlerText(t *testing.T) {
 			"Content-Type":   {"text/plain"},
 			"Content-Length": {strconv.Itoa(len(text))},
 		},
-		response.Result().Header,
+		response.Result().Header, // nolint:bodyclose
 	)
 
 	assert.Equal(text, response.Body.String())
@@ -80,7 +80,7 @@ func testConstantHandlerNoContentType(t *testing.T) {
 			"Test":           {"true"},
 			"Content-Length": {strconv.Itoa(len(text))},
 		},
-		response.Result().Header,
+		response.Result().Header, // nolint:bodyclose
 	)
 
 	assert.Equal(text, response.Body.String())
@@ -116,7 +116,7 @@ func TestConstantJSON(t *testing.T) {
 			"Content-Type":   {"application/json; charset=utf-8"},
 			"Content-Length": {strconv.Itoa(len(ch.Body))},
 		},
-		response.Result().Header,
+		response.Result().Header, // nolint:bodyclose
 	)
 
 	assert.JSONEq(
