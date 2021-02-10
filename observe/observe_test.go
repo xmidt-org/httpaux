@@ -353,7 +353,6 @@ func newDecorateCases() (cases []decorateCase) {
 
 type NewTestSuite struct {
 	suite.Suite
-	cases []decorateCase
 }
 
 func (suite *NewTestSuite) TestDecoration() {
