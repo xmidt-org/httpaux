@@ -38,6 +38,7 @@ func TestRoundTripper(t *testing.T) {
 	r, err := c.Do(expected)
 	assert.NoError(err)
 	require.NotNil(r)
+	defer r.Body.Close()
 	assert.Equal(217, r.StatusCode)
 	c.CloseIdleConnections()
 
@@ -73,6 +74,7 @@ func TestCloseIdler(t *testing.T) {
 	r, err := c.Do(expected)
 	assert.NoError(err)
 	require.NotNil(r)
+	defer r.Body.Close()
 	assert.Equal(288, r.StatusCode)
 	c.CloseIdleConnections()
 
