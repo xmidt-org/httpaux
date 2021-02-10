@@ -154,13 +154,7 @@ func (suite *ClientTestSuite) checkRoundTripper(rt http.RoundTripper) (*http.Res
 	request, err := http.NewRequest("GET", suite.server.URL+"/test", nil)
 	suite.Require().NoError(err)
 
-	response, err := rt.RoundTrip(request)
-	if response != nil {
-		io.Copy(ioutil.Discard, response.Body)
-		response.Body.Close()
-	}
-
-	return response, err
+	return rt.RoundTrip(request)
 }
 
 func (suite *ClientTestSuite) TestNilGate() {
@@ -180,6 +174,8 @@ func (suite *ClientTestSuite) TestDefaultOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
+		io.Copy(ioutil.Discard, response.Body)
+		response.Body.Close()
 	})
 
 	suite.Run("NilNext", func() {
@@ -189,6 +185,8 @@ func (suite *ClientTestSuite) TestDefaultOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
+		io.Copy(ioutil.Discard, response.Body)
+		response.Body.Close()
 	})
 }
 
@@ -199,7 +197,11 @@ func (suite *ClientTestSuite) TestDefaultClosed() {
 		rt := Client{Gate: suite.gate}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
-		suite.Nil(response)
+		if !suite.Nil(response) {
+			io.Copy(ioutil.Discard, response.Body)
+			response.Body.Close()
+		}
+
 		suite.IsType((*ClosedError)(nil), err)
 	})
 
@@ -207,7 +209,11 @@ func (suite *ClientTestSuite) TestDefaultClosed() {
 		rt := Client{Gate: suite.gate}.ThenRoundTrip(nil)
 		response, err := suite.checkRoundTripper(rt)
 
-		suite.Nil(response)
+		if !suite.Nil(response) {
+			io.Copy(ioutil.Discard, response.Body)
+			response.Body.Close()
+		}
+
 		suite.IsType((*ClosedError)(nil), err)
 	})
 }
@@ -223,6 +229,8 @@ func (suite *ClientTestSuite) TestCustomOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
+		io.Copy(ioutil.Discard, response.Body)
+		response.Body.Close()
 	})
 
 	suite.Run("NilNext", func() {
@@ -235,6 +243,8 @@ func (suite *ClientTestSuite) TestCustomOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
+		io.Copy(ioutil.Discard, response.Body)
+		response.Body.Close()
 	})
 }
 
@@ -248,7 +258,11 @@ func (suite *ClientTestSuite) TestCustomClosed() {
 		}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
-		suite.Nil(response)
+		if !suite.Nil(response) {
+			io.Copy(ioutil.Discard, response.Body)
+			response.Body.Close()
+		}
+
 		suite.Equal(suite.customClosedErr, err)
 	})
 
@@ -259,7 +273,11 @@ func (suite *ClientTestSuite) TestCustomClosed() {
 		}.ThenRoundTrip(new(http.Transport))
 		response, err := suite.checkRoundTripper(rt)
 
-		suite.Nil(response)
+		if !suite.Nil(response) {
+			io.Copy(ioutil.Discard, response.Body)
+			response.Body.Close()
+		}
+
 		suite.Equal(suite.customClosedErr, err)
 	})
 }
