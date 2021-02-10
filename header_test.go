@@ -52,10 +52,11 @@ func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
 		decorated = h.RoundTrip(next)
 	)
 
-	next.OnRoundTrip(request).Return(&http.Response{StatusCode: 284}, nil).Once()
+	next.OnRoundTrip(request).Return(&http.Response{StatusCode: 284, Body: httpmock.BodyBytes(nil)}, nil).Once()
 	require.NotNil(decorated)
 	response, err := decorated.RoundTrip(request)
 	require.NotNil(response)
+	defer response.Body.Close()
 	assert.Equal(284, response.StatusCode)
 	assert.NoError(err)
 
