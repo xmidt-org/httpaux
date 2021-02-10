@@ -22,7 +22,7 @@ func TestFunc(t *testing.T) {
 		f      Func = func(actual *http.Request) (*http.Response, error) {
 			called = true
 			assert.Equal(expected, actual)
-			return &http.Response{StatusCode: 211, Body: httpmock.BodyBytes(nil)}, nil
+			return &http.Response{StatusCode: 211, Body: httpmock.EmptyBody()}, nil
 		}
 	)
 
@@ -85,7 +85,7 @@ func (suite *PreserveCloseIdlerTestSuite) BeforeTest(_, testName string) {
 		Header: http.Header{
 			"X-Test": {testName},
 		},
-		Body: httpmock.BodyBytes(nil),
+		Body: httpmock.EmptyBody(),
 	}
 
 	suite.err = fmt.Errorf("expected error: %s", testName)

@@ -161,7 +161,7 @@ func (suite *ChainTestSuite) TestThenNoCloseIdler() {
 		request  = httptest.NewRequest("GET", "/noCloseIdler", nil)
 		response = &http.Response{
 			StatusCode: 674,
-			Body:       httpmock.BodyBytes(nil),
+			Body:       httpmock.EmptyBody(),
 		}
 		err = errors.New("expected no CloseIdler error")
 
@@ -204,7 +204,7 @@ func (suite *ChainTestSuite) TestThenCloseIdler() {
 		request  = httptest.NewRequest("GET", "/closeIdler", nil)
 		response = &http.Response{
 			StatusCode: 722,
-			Body:       httpmock.BodyBytes(nil),
+			Body:       httpmock.EmptyBody(),
 		}
 		err = errors.New("expected CloseIdler error")
 
