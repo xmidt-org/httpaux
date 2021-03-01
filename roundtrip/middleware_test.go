@@ -12,26 +12,26 @@ import (
 	"github.com/xmidt-org/httpaux/httpmock"
 )
 
-func TestConstructor(t *testing.T) {
+func TestFunc(t *testing.T) {
 	var (
 		assert   = assert.New(t)
 		require  = require.New(t)
-		expected = &http.Transport{
-			MaxResponseHeaderBytes: 1234,
-		}
+		expected = httptest.NewRequest("GET", "/", nil)
 
 		called bool
-		c      Constructor = func(actual http.RoundTripper) http.RoundTripper {
+		f      Func = func(actual *http.Request) (*http.Response, error) {
 			called = true
 			assert.Equal(expected, actual)
-			return actual
+			return &http.Response{StatusCode: 211, Body: httpmock.EmptyBody()}, nil
 		}
 	)
 
-	decorated := c.ThenRoundTrip(expected)
+	response, err := f.RoundTrip(expected)
 	assert.True(called)
-	require.NotNil(decorated)
-	assert.Equal(expected, decorated)
+	assert.NoError(err)
+	require.NotNil(response)
+	defer response.Body.Close()
+	assert.Equal(211, response.StatusCode)
 }
 
 type ChainTestSuite struct {
@@ -43,7 +43,7 @@ func (suite *ChainTestSuite) TestUninitialized() {
 		next  = new(httpmock.RoundTripper)
 		chain Chain
 
-		decorator = chain.ThenRoundTrip(next)
+		decorator = chain.Then(next)
 	)
 
 	suite.Require().NotNil(decorator)
@@ -56,7 +56,7 @@ func (suite *ChainTestSuite) TestEmpty() {
 		next  = new(httpmock.RoundTripper)
 		chain = NewChain()
 
-		decorator = chain.ThenRoundTrip(next)
+		decorator = chain.Then(next)
 	)
 
 	suite.Require().NotNil(decorator)
@@ -81,7 +81,7 @@ func (suite *ChainTestSuite) TestAppend() {
 	)
 
 	suite.Equal(initial, initial.Append())
-	suite.Same(next, initial.ThenRoundTrip(next))
+	suite.Same(next, initial.Then(next))
 	suite.Equal([]int{1, 0}, called)
 
 	appended := initial.Append(
@@ -93,12 +93,12 @@ func (suite *ChainTestSuite) TestAppend() {
 
 	called = nil
 	suite.NotEqual(initial, appended)
-	suite.Same(next, appended.ThenRoundTrip(next))
+	suite.Same(next, appended.Then(next))
 	suite.Equal([]int{2, 1, 0}, called)
 
 	// initial shouldn't have changed
 	called = nil
-	suite.Same(next, initial.ThenRoundTrip(next))
+	suite.Same(next, initial.Then(next))
 	suite.Equal([]int{1, 0}, called)
 
 	next.AssertExpectations(suite.T())
@@ -121,7 +121,7 @@ func (suite *ChainTestSuite) TestExtend() {
 	)
 
 	suite.Equal(initial, initial.Extend(Chain{}))
-	suite.Same(next, initial.ThenRoundTrip(next))
+	suite.Same(next, initial.Then(next))
 	suite.Equal([]int{1, 0}, called)
 
 	extended := initial.Extend(
@@ -135,12 +135,12 @@ func (suite *ChainTestSuite) TestExtend() {
 
 	called = nil
 	suite.NotEqual(initial, extended)
-	suite.Same(next, extended.ThenRoundTrip(next))
+	suite.Same(next, extended.Then(next))
 	suite.Equal([]int{2, 1, 0}, called)
 
 	// initial shouldn't have changed
 	called = nil
-	suite.Same(next, initial.ThenRoundTrip(next))
+	suite.Same(next, initial.Then(next))
 	suite.Equal([]int{1, 0}, called)
 
 	next.AssertExpectations(suite.T())
@@ -153,7 +153,7 @@ func (suite *ChainTestSuite) TestThenDefaultTransport() {
 		},
 	)
 
-	suite.Same(http.DefaultTransport, chain.ThenRoundTrip(nil))
+	suite.Same(http.DefaultTransport, chain.Then(nil))
 }
 
 func (suite *ChainTestSuite) TestThenNoCloseIdler() {
@@ -183,7 +183,7 @@ func (suite *ChainTestSuite) TestThenNoCloseIdler() {
 		)
 	)
 
-	decorator := chain.ThenRoundTrip(next)
+	decorator := chain.Then(next)
 	suite.Require().NotNil(decorator)
 	next.OnRoundTrip(request).Once().Return(response, err)
 
@@ -226,7 +226,7 @@ func (suite *ChainTestSuite) TestThenCloseIdler() {
 		)
 	)
 
-	decorator := chain.ThenRoundTrip(next)
+	decorator := chain.Then(next)
 	suite.Require().NotNil(decorator)
 	next.OnRoundTrip(request).Once().Return(response, err)
 	next.OnCloseIdleConnections().Once()

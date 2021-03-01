@@ -2,16 +2,6 @@ package roundtrip
 
 import "net/http"
 
-// Func is a function that that implements http.RoundTripper.
-type Func func(*http.Request) (*http.Response, error)
-
-// RoundTrip invokes this function and returns the results
-func (f Func) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
-}
-
-var _ http.RoundTripper = Func(nil)
-
 // CloseIdler is the strategy for closing idle connections.  This package
 // makes this behavior explicit so that middleware will not hide this behavior.
 type CloseIdler interface {

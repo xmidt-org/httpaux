@@ -2,8 +2,6 @@ package busy
 
 import (
 	"net/http"
-
-	"github.com/xmidt-org/httpaux"
 )
 
 // Server defines a server middleware that enforces request limiting
@@ -20,8 +18,6 @@ type Server struct {
 	// If this field is nil, this middleware simply returns http.StatusServiceUnavailable.
 	Busy http.Handler
 }
-
-var _ httpaux.ServerMiddleware = Server{}
 
 // Then is a server middleware that enforces this busy configuration.  If Limiter is nil,
 // no decoration is done and next is returned as is.  If OnBusy is nil, then the returned
