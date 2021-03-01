@@ -200,30 +200,30 @@ func (suite *ChainTestSuite) TestExtend() {
 
 	for i, record := range testData {
 		suite.Run(strconv.Itoa(i), func() {
-			appended := record.chain.Extend(record.toExtend)
+			extended := record.chain.Extend(record.toExtend)
 
 			suite.Run("WithClient", func() {
 				client := new(http.Client)
-				decorated := appended.Then(client)
+				decorated := extended.Then(client)
 				suite.Require().NotNil(decorated)
 				suite.assertRequest(record.expectedOrder, decorated)
 			})
 
 			suite.Run("NilClient", func() {
-				decorated := appended.Then(nil)
+				decorated := extended.Then(nil)
 				suite.Require().NotNil(decorated)
 				suite.assertRequest(record.expectedOrder, decorated)
 			})
 
 			suite.Run("WithClientFunc", func() {
 				client := new(http.Client)
-				decorated := appended.ThenFunc(client.Do)
+				decorated := extended.ThenFunc(client.Do)
 				suite.Require().NotNil(decorated)
 				suite.assertRequest(record.expectedOrder, decorated)
 			})
 
 			suite.Run("NilClientFunc", func() {
-				decorated := appended.ThenFunc(nil)
+				decorated := extended.ThenFunc(nil)
 				suite.Require().NotNil(decorated)
 				suite.assertRequest(record.expectedOrder, decorated)
 			})
