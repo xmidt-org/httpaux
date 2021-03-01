@@ -15,6 +15,8 @@ func (f Func) Do(request *http.Request) (*http.Response, error) {
 	return f(request)
 }
 
+var _ httpaux.Client = Func(nil)
+
 // Constructor applies clientside middleware to an HTTP client, as implemented
 // by httpaux.Client.
 type Constructor func(httpaux.Client) httpaux.Client
