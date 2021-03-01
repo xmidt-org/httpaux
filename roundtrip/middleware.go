@@ -89,3 +89,12 @@ func (c Chain) Then(next http.RoundTripper) http.RoundTripper {
 
 	return next
 }
+
+// ThenFunc allows one to more easily use a round tripper function as a RoundTripper
+func (c Chain) ThenFunc(next Func) http.RoundTripper {
+	if next == nil {
+		return c.Then(http.DefaultTransport) // avoid "nil" interface
+	}
+
+	return c.Then(next)
+}

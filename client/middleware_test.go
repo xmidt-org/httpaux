@@ -67,6 +67,8 @@ func (suite *ChainTestSuite) TearDownSuite() {
 
 // assertRequest verifies that the given client is functional
 func (suite *ChainTestSuite) assertRequest(expectedOrder []int, client httpaux.Client) {
+	suite.Require().NotNil(client)
+
 	suite.order = nil
 	request, err := http.NewRequest("GET", suite.server.URL+"/test", nil)
 	suite.Require().NoError(err)
@@ -133,29 +135,32 @@ func (suite *ChainTestSuite) TestAppend() {
 			appended := record.chain.Append(record.toAppend...)
 
 			suite.Run("WithClient", func() {
-				client := new(http.Client)
-				decorated := appended.Then(client)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.Then(new(http.Client)),
+				)
 			})
 
 			suite.Run("NilClient", func() {
-				decorated := appended.Then(nil)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.Then(nil),
+				)
 			})
 
 			suite.Run("WithClientFunc", func() {
 				client := new(http.Client)
-				decorated := appended.ThenFunc(client.Do)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.ThenFunc(client.Do),
+				)
 			})
 
 			suite.Run("NilClientFunc", func() {
-				decorated := appended.ThenFunc(nil)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.ThenFunc(nil),
+				)
 			})
 		})
 	}
@@ -203,29 +208,32 @@ func (suite *ChainTestSuite) TestExtend() {
 			extended := record.chain.Extend(record.toExtend)
 
 			suite.Run("WithClient", func() {
-				client := new(http.Client)
-				decorated := extended.Then(client)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.Then(new(http.Client)),
+				)
 			})
 
 			suite.Run("NilClient", func() {
-				decorated := extended.Then(nil)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.Then(nil),
+				)
 			})
 
 			suite.Run("WithClientFunc", func() {
 				client := new(http.Client)
-				decorated := extended.ThenFunc(client.Do)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.ThenFunc(client.Do),
+				)
 			})
 
 			suite.Run("NilClientFunc", func() {
-				decorated := extended.ThenFunc(nil)
-				suite.Require().NotNil(decorated)
-				suite.assertRequest(record.expectedOrder, decorated)
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.ThenFunc(nil),
+				)
 			})
 		})
 	}

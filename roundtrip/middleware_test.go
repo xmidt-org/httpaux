@@ -2,246 +2,244 @@ package roundtrip
 
 import (
 	"errors"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/xmidt-org/httpaux/httpmock"
 )
 
 func TestFunc(t *testing.T) {
 	var (
-		assert   = assert.New(t)
-		require  = require.New(t)
-		expected = httptest.NewRequest("GET", "/", nil)
+		assert = assert.New(t)
 
-		called bool
-		f      Func = func(actual *http.Request) (*http.Response, error) {
-			called = true
-			assert.Equal(expected, actual)
-			return &http.Response{StatusCode: 211, Body: httpmock.EmptyBody()}, nil
-		}
+		request     = new(http.Request)
+		expected    = new(http.Response)
+		expectedErr = errors.New("expected")
 	)
 
-	response, err := f.RoundTrip(expected)
-	assert.True(called)
-	assert.NoError(err)
-	require.NotNil(response)
-	defer response.Body.Close()
-	assert.Equal(211, response.StatusCode)
+	//nolint:bodyclose
+	actual, actualErr := Func(func(r *http.Request) (*http.Response, error) {
+		assert.True(request == r)
+		return expected, expectedErr
+	})(request)
+
+	assert.True(expected == actual)
+	assert.Equal(expectedErr, actualErr)
 }
 
 type ChainTestSuite struct {
 	suite.Suite
+
+	server *httptest.Server
+
+	// order is used to verify the execution order of decorators
+	order []int
 }
 
-func (suite *ChainTestSuite) TestUninitialized() {
-	var (
-		next  = new(httpmock.RoundTripper)
-		chain Chain
+var _ suite.SetupTestSuite = (*ChainTestSuite)(nil)
+var _ suite.SetupAllSuite = (*ChainTestSuite)(nil)
+var _ suite.TearDownAllSuite = (*ChainTestSuite)(nil)
 
-		decorator = chain.Then(next)
-	)
-
-	suite.Require().NotNil(decorator)
-	suite.Equal(next, decorator)
-	next.AssertExpectations(suite.T())
+func (suite *ChainTestSuite) testHandle(rw http.ResponseWriter, r *http.Request) {
+	rw.WriteHeader(299)
 }
 
-func (suite *ChainTestSuite) TestEmpty() {
-	var (
-		next  = new(httpmock.RoundTripper)
-		chain = NewChain()
-
-		decorator = chain.Then(next)
+func (suite *ChainTestSuite) SetupSuite() {
+	suite.server = httptest.NewServer(
+		http.HandlerFunc(suite.testHandle),
 	)
+}
 
-	suite.Require().NotNil(decorator)
-	suite.Equal(next, decorator)
-	next.AssertExpectations(suite.T())
+func (suite *ChainTestSuite) SetupTest() {
+	suite.order = nil
+}
+
+func (suite *ChainTestSuite) TearDownSuite() {
+	suite.server.Close()
+	suite.server = nil
+}
+
+// assertRequest verifies that the given round tripper is functional
+func (suite *ChainTestSuite) assertRequest(expectedOrder []int, transport http.RoundTripper) {
+	suite.Require().NotNil(transport)
+
+	suite.order = nil
+	request, err := http.NewRequest("GET", suite.server.URL+"/test", nil)
+	suite.Require().NoError(err)
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	response, err := client.Do(request)
+	suite.Require().NoError(err)
+
+	defer response.Body.Close()
+	io.Copy(ioutil.Discard, response.Body)
+	suite.Equal(expectedOrder, suite.order, "the decorators did not run in the expected order")
+	suite.Equal(299, response.StatusCode, "the test server was not invoked")
+}
+
+// newConstructor is a helper for returning a Constructor that expects its
+// decorator to be in a certain order relative to other constructors
+func (suite *ChainTestSuite) newConstructor(order int) Constructor {
+	return func(next http.RoundTripper) http.RoundTripper {
+		return Func(func(r *http.Request) (*http.Response, error) {
+			suite.order = append(suite.order, order)
+			return next.RoundTrip(r)
+		})
+	}
 }
 
 func (suite *ChainTestSuite) TestAppend() {
-	var (
-		next    = new(httpmock.RoundTripper)
-		called  []int
-		initial = NewChain(
-			func(next http.RoundTripper) http.RoundTripper {
-				called = append(called, 0)
-				return next
-			},
-			func(next http.RoundTripper) http.RoundTripper {
-				called = append(called, 1)
-				return next
-			},
-		)
-	)
-
-	suite.Equal(initial, initial.Append())
-	suite.Same(next, initial.Then(next))
-	suite.Equal([]int{1, 0}, called)
-
-	appended := initial.Append(
-		func(next http.RoundTripper) http.RoundTripper {
-			called = append(called, 2)
-			return next
+	testData := []struct {
+		chain         Chain
+		toAppend      []Constructor
+		expectedOrder []int
+	}{
+		{
+			chain:         Chain{},
+			toAppend:      nil,
+			expectedOrder: nil,
 		},
-	)
+		{
+			chain: NewChain(
+				suite.newConstructor(0),
+			),
+			expectedOrder: []int{0},
+		},
+		{
+			chain: Chain{},
+			toAppend: []Constructor{
+				suite.newConstructor(0),
+			},
+			expectedOrder: []int{0},
+		},
+		{
+			chain: NewChain(
+				suite.newConstructor(0),
+				suite.newConstructor(1),
+			),
+			toAppend: []Constructor{
+				suite.newConstructor(2),
+				suite.newConstructor(3),
+			},
+			expectedOrder: []int{0, 1, 2, 3},
+		},
+	}
 
-	called = nil
-	suite.NotEqual(initial, appended)
-	suite.Same(next, appended.Then(next))
-	suite.Equal([]int{2, 1, 0}, called)
+	for i, record := range testData {
+		suite.Run(strconv.Itoa(i), func() {
+			appended := record.chain.Append(record.toAppend...)
 
-	// initial shouldn't have changed
-	called = nil
-	suite.Same(next, initial.Then(next))
-	suite.Equal([]int{1, 0}, called)
+			suite.Run("WithRoundTripper", func() {
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.Then(new(http.Transport)),
+				)
+			})
 
-	next.AssertExpectations(suite.T())
+			suite.Run("NilRoundTripper", func() {
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.Then(nil),
+				)
+			})
+
+			suite.Run("WithRoundTripperFunc", func() {
+				transport := new(http.Transport)
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.ThenFunc(transport.RoundTrip),
+				)
+			})
+
+			suite.Run("NilRoundTripperFunc", func() {
+				suite.assertRequest(
+					record.expectedOrder,
+					appended.ThenFunc(nil),
+				)
+			})
+		})
+	}
 }
 
 func (suite *ChainTestSuite) TestExtend() {
-	var (
-		next    = new(httpmock.RoundTripper)
-		called  []int
-		initial = NewChain(
-			func(next http.RoundTripper) http.RoundTripper {
-				called = append(called, 0)
-				return next
-			},
-			func(next http.RoundTripper) http.RoundTripper {
-				called = append(called, 1)
-				return next
-			},
-		)
-	)
-
-	suite.Equal(initial, initial.Extend(Chain{}))
-	suite.Same(next, initial.Then(next))
-	suite.Equal([]int{1, 0}, called)
-
-	extended := initial.Extend(
-		NewChain(
-			func(next http.RoundTripper) http.RoundTripper {
-				called = append(called, 2)
-				return next
-			},
-		),
-	)
-
-	called = nil
-	suite.NotEqual(initial, extended)
-	suite.Same(next, extended.Then(next))
-	suite.Equal([]int{2, 1, 0}, called)
-
-	// initial shouldn't have changed
-	called = nil
-	suite.Same(next, initial.Then(next))
-	suite.Equal([]int{1, 0}, called)
-
-	next.AssertExpectations(suite.T())
-}
-
-func (suite *ChainTestSuite) TestThenDefaultTransport() {
-	chain := NewChain(
-		func(next http.RoundTripper) http.RoundTripper {
-			return next
+	testData := []struct {
+		chain         Chain
+		toExtend      Chain
+		expectedOrder []int
+	}{
+		{
+			chain:         Chain{},
+			toExtend:      Chain{},
+			expectedOrder: nil,
 		},
-	)
+		{
+			chain: NewChain(
+				suite.newConstructor(0),
+			),
+			expectedOrder: []int{0},
+		},
+		{
+			chain: Chain{},
+			toExtend: NewChain(
+				suite.newConstructor(0),
+			),
+			expectedOrder: []int{0},
+		},
+		{
+			chain: NewChain(
+				suite.newConstructor(0),
+				suite.newConstructor(1),
+			),
+			toExtend: NewChain(
+				suite.newConstructor(2),
+				suite.newConstructor(3),
+			),
+			expectedOrder: []int{0, 1, 2, 3},
+		},
+	}
 
-	suite.Same(http.DefaultTransport, chain.Then(nil))
-}
+	for i, record := range testData {
+		suite.Run(strconv.Itoa(i), func() {
+			extended := record.chain.Extend(record.toExtend)
 
-func (suite *ChainTestSuite) TestThenNoCloseIdler() {
-	var (
-		request  = httptest.NewRequest("GET", "/noCloseIdler", nil)
-		response = &http.Response{
-			StatusCode: 674,
-			Body:       httpmock.EmptyBody(),
-		}
-		err = errors.New("expected no CloseIdler error")
+			suite.Run("WithRoundTripper", func() {
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.Then(new(http.Transport)),
+				)
+			})
 
-		next   = new(httpmock.RoundTripper)
-		called []int
-		chain  = NewChain(
-			func(next http.RoundTripper) http.RoundTripper {
-				return Func(func(r *http.Request) (*http.Response, error) {
-					called = append(called, 0)
-					return next.RoundTrip(r)
-				})
-			},
-			func(next http.RoundTripper) http.RoundTripper {
-				return Func(func(r *http.Request) (*http.Response, error) {
-					called = append(called, 1)
-					return next.RoundTrip(r)
-				})
-			},
-		)
-	)
+			suite.Run("NilRoundTripper", func() {
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.Then(nil),
+				)
+			})
 
-	decorator := chain.Then(next)
-	suite.Require().NotNil(decorator)
-	next.OnRoundTrip(request).Once().Return(response, err)
+			suite.Run("WithRoundTripperFunc", func() {
+				transport := new(http.Transport)
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.ThenFunc(transport.RoundTrip),
+				)
+			})
 
-	actual, actualErr := decorator.RoundTrip(request)
-	suite.Require().NotNil(actual)
-	defer actual.Body.Close()
-	suite.Equal(response, actual)
-	suite.Equal(err, actualErr)
-	suite.Equal([]int{0, 1}, called)
-
-	_, ok := decorator.(CloseIdler)
-	suite.False(ok)
-	next.AssertExpectations(suite.T())
-}
-
-func (suite *ChainTestSuite) TestThenCloseIdler() {
-	var (
-		request  = httptest.NewRequest("GET", "/closeIdler", nil)
-		response = &http.Response{
-			StatusCode: 722,
-			Body:       httpmock.EmptyBody(),
-		}
-		err = errors.New("expected CloseIdler error")
-
-		next   = new(httpmock.CloseIdler)
-		called []int
-		chain  = NewChain(
-			func(next http.RoundTripper) http.RoundTripper {
-				return Func(func(r *http.Request) (*http.Response, error) {
-					called = append(called, 0)
-					return next.RoundTrip(r)
-				})
-			},
-			func(next http.RoundTripper) http.RoundTripper {
-				return Func(func(r *http.Request) (*http.Response, error) {
-					called = append(called, 1)
-					return next.RoundTrip(r)
-				})
-			},
-		)
-	)
-
-	decorator := chain.Then(next)
-	suite.Require().NotNil(decorator)
-	next.OnRoundTrip(request).Once().Return(response, err)
-	next.OnCloseIdleConnections().Once()
-
-	actual, actualErr := decorator.RoundTrip(request)
-	suite.Require().NotNil(actual)
-	defer actual.Body.Close()
-	suite.Equal(response, actual)
-	suite.Equal(err, actualErr)
-	suite.Equal([]int{0, 1}, called)
-
-	suite.Require().Implements((*CloseIdler)(nil), decorator)
-	decorator.(CloseIdler).CloseIdleConnections()
-
-	next.AssertExpectations(suite.T())
+			suite.Run("NilRoundTripperFunc", func() {
+				suite.assertRequest(
+					record.expectedOrder,
+					extended.ThenFunc(nil),
+				)
+			})
+		})
+	}
 }
 
 func TestChain(t *testing.T) {
