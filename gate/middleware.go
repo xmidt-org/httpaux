@@ -2,8 +2,6 @@ package gate
 
 import (
 	"net/http"
-
-	"github.com/xmidt-org/httpaux"
 )
 
 // Server defines a serverside middleware that controls access to handlers
@@ -20,8 +18,6 @@ type Server struct {
 	// is unset, this middleware is a nop.
 	Gate Status
 }
-
-var _ httpaux.ServerMiddleware = Server{}
 
 // Then decorates a handler so that it is controlled by the Gate field.  Next is required
 // and cannot be nil, or a panic will result.
@@ -57,9 +53,7 @@ type Client struct {
 	Gate Status
 }
 
-var _ httpaux.ClientMiddleware = Client{}
-
-// ThenRoundTrip decorates a round tripper so that it is controlled by the Gate field.
+// Then decorates a round tripper so that it is controlled by the Gate field.
 //
 // The returned http.RoundTripper will always supply a CloseIdleConnections method.
 // If next also supplies that method, it will be invoked whenever the decorator's method
@@ -67,7 +61,7 @@ var _ httpaux.ClientMiddleware = Client{}
 //
 // For consistency with other libraries, if next is nil then http.DefaultTransport
 // is used as the decorated round tripper.
-func (c Client) ThenRoundTrip(next http.RoundTripper) http.RoundTripper {
+func (c Client) Then(next http.RoundTripper) http.RoundTripper {
 	if c.Gate == nil {
 		return next
 	} else if next == nil {

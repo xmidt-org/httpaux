@@ -7,32 +7,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/xmidt-org/httpaux/httpmock"
 )
-
-func TestFunc(t *testing.T) {
-	var (
-		assert   = assert.New(t)
-		require  = require.New(t)
-		expected = httptest.NewRequest("GET", "/", nil)
-
-		called bool
-		f      Func = func(actual *http.Request) (*http.Response, error) {
-			called = true
-			assert.Equal(expected, actual)
-			return &http.Response{StatusCode: 211, Body: httpmock.EmptyBody()}, nil
-		}
-	)
-
-	response, err := f.RoundTrip(expected)
-	assert.True(called)
-	assert.NoError(err)
-	require.NotNil(response)
-	defer response.Body.Close()
-	assert.Equal(211, response.StatusCode)
-}
 
 func TestCloseIdlerFunc(t *testing.T) {
 	var (

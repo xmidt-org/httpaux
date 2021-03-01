@@ -1,4 +1,4 @@
-package roundtrip
+package client
 
 import (
 	"errors"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/xmidt-org/httpaux"
 )
 
 func TestFunc(t *testing.T) {
@@ -64,17 +65,13 @@ func (suite *ChainTestSuite) TearDownSuite() {
 	suite.server = nil
 }
 
-// assertRequest verifies that the given round tripper is functional
-func (suite *ChainTestSuite) assertRequest(expectedOrder []int, transport http.RoundTripper) {
-	suite.Require().NotNil(transport)
+// assertRequest verifies that the given client is functional
+func (suite *ChainTestSuite) assertRequest(expectedOrder []int, client httpaux.Client) {
+	suite.Require().NotNil(client)
 
 	suite.order = nil
 	request, err := http.NewRequest("GET", suite.server.URL+"/test", nil)
 	suite.Require().NoError(err)
-
-	client := &http.Client{
-		Transport: transport,
-	}
 
 	response, err := client.Do(request)
 	suite.Require().NoError(err)
@@ -88,10 +85,10 @@ func (suite *ChainTestSuite) assertRequest(expectedOrder []int, transport http.R
 // newConstructor is a helper for returning a Constructor that expects its
 // decorator to be in a certain order relative to other constructors
 func (suite *ChainTestSuite) newConstructor(order int) Constructor {
-	return func(next http.RoundTripper) http.RoundTripper {
+	return func(next httpaux.Client) httpaux.Client {
 		return Func(func(r *http.Request) (*http.Response, error) {
 			suite.order = append(suite.order, order)
-			return next.RoundTrip(r)
+			return next.Do(r)
 		})
 	}
 }
@@ -137,29 +134,29 @@ func (suite *ChainTestSuite) TestAppend() {
 		suite.Run(strconv.Itoa(i), func() {
 			appended := record.chain.Append(record.toAppend...)
 
-			suite.Run("WithRoundTripper", func() {
+			suite.Run("WithClient", func() {
 				suite.assertRequest(
 					record.expectedOrder,
-					appended.Then(new(http.Transport)),
+					appended.Then(new(http.Client)),
 				)
 			})
 
-			suite.Run("NilRoundTripper", func() {
+			suite.Run("NilClient", func() {
 				suite.assertRequest(
 					record.expectedOrder,
 					appended.Then(nil),
 				)
 			})
 
-			suite.Run("WithRoundTripperFunc", func() {
-				transport := new(http.Transport)
+			suite.Run("WithClientFunc", func() {
+				client := new(http.Client)
 				suite.assertRequest(
 					record.expectedOrder,
-					appended.ThenFunc(transport.RoundTrip),
+					appended.ThenFunc(client.Do),
 				)
 			})
 
-			suite.Run("NilRoundTripperFunc", func() {
+			suite.Run("NilClientFunc", func() {
 				suite.assertRequest(
 					record.expectedOrder,
 					appended.ThenFunc(nil),
@@ -210,29 +207,29 @@ func (suite *ChainTestSuite) TestExtend() {
 		suite.Run(strconv.Itoa(i), func() {
 			extended := record.chain.Extend(record.toExtend)
 
-			suite.Run("WithRoundTripper", func() {
+			suite.Run("WithClient", func() {
 				suite.assertRequest(
 					record.expectedOrder,
-					extended.Then(new(http.Transport)),
+					extended.Then(new(http.Client)),
 				)
 			})
 
-			suite.Run("NilRoundTripper", func() {
+			suite.Run("NilClient", func() {
 				suite.assertRequest(
 					record.expectedOrder,
 					extended.Then(nil),
 				)
 			})
 
-			suite.Run("WithRoundTripperFunc", func() {
-				transport := new(http.Transport)
+			suite.Run("WithClientFunc", func() {
+				client := new(http.Client)
 				suite.assertRequest(
 					record.expectedOrder,
-					extended.ThenFunc(transport.RoundTrip),
+					extended.ThenFunc(client.Do),
 				)
 			})
 
-			suite.Run("NilRoundTripperFunc", func() {
+			suite.Run("NilClientFunc", func() {
 				suite.assertRequest(
 					record.expectedOrder,
 					extended.ThenFunc(nil),
