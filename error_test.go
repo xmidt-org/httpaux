@@ -1,6 +1,7 @@
 package httpaux
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -128,5 +129,15 @@ func TestIsTemporary(t *testing.T) {
 		IsTemporary(&net.DNSError{
 			IsTemporary: true,
 		}),
+	)
+
+	assert.False(
+		IsTemporary(context.Canceled),
+	)
+
+	// context.DeadlineExceeded is a Temporary error
+	// see: https://go.googlesource.com/go/+/go1.16/src/context/context.go#167
+	assert.True(
+		IsTemporary(context.DeadlineExceeded),
 	)
 }
