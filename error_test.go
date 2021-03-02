@@ -3,6 +3,7 @@ package httpaux
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"testing"
 
@@ -108,4 +109,24 @@ func TestError(t *testing.T) {
 	t.Run("Simple", testErrorSimple)
 	t.Run("NoMessage", testErrorNoMessage)
 	t.Run("CustomMessage", testErrorCustomMessage)
+}
+
+func TestIsTemporary(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.False(
+		IsTemporary(errors.New("this isn't a temporary error")),
+	)
+
+	assert.False(
+		IsTemporary(&net.DNSError{
+			IsTemporary: false,
+		}),
+	)
+
+	assert.True(
+		IsTemporary(&net.DNSError{
+			IsTemporary: true,
+		}),
+	)
 }
