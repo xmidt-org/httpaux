@@ -43,46 +43,56 @@ func newIntervals(cfg Config) intervals {
 		return nil // no retries
 	}
 
-	intervals := make([]interval, cfg.Retries)
-	if cfg.Interval > 0 {
-		intervals[0].base = cfg.Interval
-	} else {
-		intervals[0].base = DefaultInterval
+	i := make(intervals, cfg.Retries)
+
+	// "seed" the first element
+	i[0].base = cfg.Interval
+	if i[0].base <= 0 {
+		i[0].base = DefaultInterval
 	}
 
-	// first pass: apply the multiplier to each interval
-	for i := 1; i < len(intervals); i++ {
-		if cfg.Multiplier > 0.0 && cfg.Multiplier != 1.0 {
-			intervals[i].base = time.Duration(
-				math.Round(float64(intervals[i-1].base) * cfg.Multiplier),
-			)
-		} else {
-			intervals[i].base = intervals[i-1].base
-		}
+	// first pass: apply the multiplier cumulatively.
+	// this is where we get the exponential backoff
+	m := cfg.Multiplier
+	if m <= 0.0 {
+		m = 1.0
 	}
 
-	// second pass: precompute the jitter ranges
+	for x := 1; x < i.Len(); x++ {
+		i[x].base = time.Duration(
+			math.Round(float64(i[x-1].base) * m),
+		)
+	}
+
+	// second pass: if applicable, apply jitter
+	// the jitter window will change if the multiplier was not 1.0
+
 	if cfg.Jitter > 0.0 && cfg.Jitter < 1.0 {
 		jitterLo, jitterHi := 1-cfg.Jitter, 1+cfg.Jitter
-		for i := 0; i < len(intervals); i++ {
-			base := intervals[i].base
 
-			// readjust to the low end of a range
-			intervals[i].base = time.Duration(
-				math.Round(float64(base) * jitterLo),
+		for x := 0; x < i.Len(); x++ {
+			// compute the limits of the jitter window
+			lo := int64(
+				math.Round(float64(i[x].base) * jitterLo),
 			)
 
-			// now compute the integral range of values
-			limit := int64(
-				math.Round(float64(base) * jitterHi),
+			hi := int64(
+				math.Round(float64(i[x].base) * jitterHi),
 			)
 
-			// add one since we use rand.Int63n and we want the highest value included
-			intervals[i].jitter = limit + 1
+			// this precomputation allows the actual retry wait time
+			// to be computed simply:
+			//
+			// base + rand.Int63n(jitter)
+			//
+			// we add one to the jitter because rand.Int63n returns a value
+			// in the range [0,n)
+			i[x].base = time.Duration(lo)
+			i[x].jitter = hi - lo + 1
 		}
 	}
 
-	return intervals
+	return i
 }
 
 // Len returns the count of precomputed intervals.  This is the same
