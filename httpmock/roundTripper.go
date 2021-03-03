@@ -34,6 +34,9 @@ func (rtc RoundTripCall) Return(r *http.Response, err error) RoundTripCall {
 }
 
 // OnRoundTrip starts a *mock.Call fluent chain to define an expectation
+//
+// The expected parameter is an interface{} allow not only a *http.Request
+// but also a MatchedBy predicate.
 func (m *RoundTripper) OnRoundTrip(expected interface{}) RoundTripCall {
 	return RoundTripCall{
 		Call: m.On("RoundTrip", expected),
