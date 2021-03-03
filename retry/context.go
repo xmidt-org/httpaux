@@ -3,6 +3,8 @@ package retry
 import (
 	"context"
 	"net/http"
+
+	"github.com/xmidt-org/httpaux"
 )
 
 // State is the current state of a retry operation.  Instances
@@ -47,7 +49,11 @@ func (s *State) Previous() (*http.Response, error) {
 // the given response's body is drained, closed, and nil'd out.
 func (s *State) prepareNext(previous *http.Response, previousErr error) {
 	s.attempt++
-	cleanupBody(previous)
+	httpaux.Cleanup(previous)
+	if previous != nil {
+		previous.Body = nil
+	}
+
 	s.previous = previous
 	s.previousErr = previousErr
 }

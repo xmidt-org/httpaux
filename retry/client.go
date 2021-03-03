@@ -2,8 +2,6 @@ package retry
 
 import (
 	"context"
-	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -12,19 +10,6 @@ import (
 	"github.com/xmidt-org/httpaux"
 	"github.com/xmidt-org/httpaux/client"
 )
-
-// cleanupBody is a helper function for ensure that a response's
-// Body is drained, cleaned, and nil'd out to help the gc.
-//
-// The response or the response's Body may be nil, in which case
-// this function does nothing.
-func cleanupBody(r *http.Response) {
-	if r != nil && r.Body != nil {
-		io.Copy(ioutil.Discard, r.Body)
-		r.Body.Close()
-		r.Body = nil
-	}
-}
 
 // NoGetBodyError indicates that the initial attempt at an HTTP transaction required
 // a retry but that the *http.Request had no GetBody field.
@@ -61,6 +46,9 @@ func (err *GetBodyError) Error() string {
 // for retries.  If cfg.Retries is nonpositive, the returned constructor does
 // no decoration.  This function is the primary and recommended way
 // to implement HTTP client retry behavior.
+//
+// The returned constructor will decorate http.DefaultClient if passed a nil
+// client.
 func New(cfg Config) client.Constructor {
 	prototype := NewClient(cfg, nil)
 	if prototype == nil {
@@ -73,7 +61,12 @@ func New(cfg Config) client.Constructor {
 		// now we can just clone the prototype and set the next member
 		c := new(Client)
 		*c = *prototype
-		c.next = next
+
+		// if next == nil, then we leave the next set to http.DefaultClient
+		if next != nil {
+			c.next = next
+		}
+
 		return c
 	}
 }
@@ -105,7 +98,7 @@ type Client struct {
 // is nonpositive, this function returns nil.
 //
 // The next instance is used to actually execute HTTP transactions.  If next
-// is nil and this Client is used, a panic can result.
+// is nil, http.DefaultClient is used.
 //
 // This function is a low-level way to instantiate a client.  Most users
 // will instead create a middleware with New.  This function can be used
@@ -118,8 +111,12 @@ func NewClient(cfg Config, next httpaux.Client) *Client {
 		return nil
 	}
 
+	if next == nil {
+		next = http.DefaultClient
+	}
+
 	c := &Client{
-		next:           next, // can be nil, as in New
+		next:           next,
 		maxElapsedTime: cfg.MaxElapsedTime,
 		intervals:      intervals,
 		random:         cfg.Random,
@@ -191,7 +188,11 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 	// this is similar to how an http.Client handles 3XX redirects
 	getBody := original.GetBody
 	if getBody == nil {
-		cleanupBody(response) // consistent with CheckRedirect
+		httpaux.Cleanup(response) // consistent with CheckRedirect
+		if response != nil {
+			response.Body = nil
+		}
+
 		return response, &NoGetBodyError{Initial: err}
 	}
 
