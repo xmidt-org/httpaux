@@ -1,58 +1,66 @@
 package httpmock
 
 import (
+	"bytes"
+	"io"
 	"io/ioutil"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestEmptyBody(t *testing.T) {
-	var (
-		assert  = assert.New(t)
-		require = require.New(t)
-
-		body = EmptyBody()
-	)
-
-	require.NotNil(body)
-	b, err := ioutil.ReadAll(body)
-	assert.Empty(b)
-	assert.NoError(err)
-	assert.NoError(body.Close())
+type BodyReadCloserTestSuite struct {
+	suite.Suite
 }
 
-func TestBodyBytes(t *testing.T) {
-	const bodyContents = "some lovely content here"
+func (suite *BodyReadCloserTestSuite) testBodyReadCloser(body *BodyReadCloser, expected []byte) {
+	suite.Require().NotNil(body)
 
-	var (
-		assert  = assert.New(t)
-		require = require.New(t)
+	actual, err := ioutil.ReadAll(body)
+	suite.Equal(expected, actual)
+	suite.NoError(err)
 
-		body = BodyBytes([]byte(bodyContents))
-	)
+	_, err = body.Read(make([]byte, 2))
+	suite.Equal(io.EOF, err)
 
-	require.NotNil(body)
-	b, err := ioutil.ReadAll(body)
-	assert.Equal(bodyContents, string(b))
-	assert.NoError(err)
-	assert.NoError(body.Close())
+	suite.False(body.Closed())
+	suite.False(Closed(body))
+	suite.NoError(body.Close())
+	suite.Equal(ErrBodyClosed, body.Close())
+
+	_, err = body.Read(make([]byte, 2))
+	suite.Equal(ErrBodyClosed, err)
+	suite.True(body.Closed())
+	suite.True(Closed(body))
 }
 
-func TestBodyString(t *testing.T) {
+func (suite *BodyReadCloserTestSuite) TestEmptyBody() {
+	body := EmptyBody()
+	suite.testBodyReadCloser(body, []byte{})
+}
+
+func (suite *BodyReadCloserTestSuite) TestBodyBytes() {
 	const bodyContents = "some lovely content here"
+	body := BodyBytes([]byte(bodyContents))
+	suite.testBodyReadCloser(body, []byte(bodyContents))
+}
 
-	var (
-		assert  = assert.New(t)
-		require = require.New(t)
+func (suite *BodyReadCloserTestSuite) TestBodyString() {
+	const bodyContents = "some lovely content here"
+	body := BodyString(bodyContents)
+	suite.testBodyReadCloser(body, []byte(bodyContents))
+}
 
-		body = BodyString(bodyContents)
+func (suite *BodyReadCloserTestSuite) TestNopCloser() {
+	body := ioutil.NopCloser(
+		bytes.NewBufferString("this body doesn't implement Closeable"),
 	)
 
-	require.NotNil(body)
-	b, err := ioutil.ReadAll(body)
-	assert.Equal(bodyContents, string(b))
-	assert.NoError(err)
-	assert.NoError(body.Close())
+	suite.Panics(func() {
+		Closed(body)
+	})
+}
+
+func TestBodyReadCloser(t *testing.T) {
+	suite.Run(t, new(BodyReadCloserTestSuite))
 }
