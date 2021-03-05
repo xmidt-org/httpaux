@@ -2,6 +2,7 @@ package httpmock
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"testing"
@@ -49,6 +50,12 @@ func (suite *BodyReadCloserTestSuite) TestBodyString() {
 	const bodyContents = "some lovely content here"
 	body := BodyString(bodyContents)
 	suite.testBodyReadCloser(body, []byte(bodyContents))
+}
+
+func (suite *BodyReadCloserTestSuite) TestBodyf() {
+	const bodyContents = "some lovely content here"
+	body := Bodyf("Format string: %d", 123)
+	suite.testBodyReadCloser(body, []byte(fmt.Sprintf("Format string: %d", 123)))
 }
 
 func (suite *BodyReadCloserTestSuite) TestNopCloser() {

@@ -3,6 +3,7 @@ package httpmock
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -82,9 +83,19 @@ func BodyBytes(b []byte) *BodyReadCloser {
 	}
 }
 
-// BodyString is syntactic sugar for creating a response body from a string
+// BodyString returns a *BodyReadCloser backed by the given string.
 func BodyString(b string) *BodyReadCloser {
 	return &BodyReadCloser{
 		buffer: bytes.NewBufferString(b),
 	}
+}
+
+// Bodyf produces a body with fmt.Sprintf.  This function is
+// equivalent to:
+//
+//   BodyString(fmt.Sprintf(format, args...))
+func Bodyf(format string, args ...interface{}) *BodyReadCloser {
+	return BodyString(
+		fmt.Sprintf(format, args...),
+	)
 }
