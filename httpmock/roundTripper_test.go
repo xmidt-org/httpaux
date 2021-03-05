@@ -1,3 +1,4 @@
+//nolint:bodyclose,errorlint // no server responses and all errors must be unwrapped
 package httpmock
 
 import (
@@ -7,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -223,6 +225,221 @@ func (suite *RoundTripperTestSuite) TestOnRequest() {
 	})
 }
 
+func (suite *RoundTripperTestSuite) TestOnMatchAll() {
+	suite.Run("Pass", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "POST",
+				URL: &url.URL{
+					Path: "/test",
+				},
+				Header: http.Header{
+					"Test": {"true"},
+				},
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+		)
+
+		transport.OnMatchAll(
+			Methods("POST"),
+			Path("/test"),
+			Header("Test", "true"),
+		).Return(expected, expectedErr).Once()
+		actual, actualErr := transport.RoundTrip(request)
+		suite.True(expected == actual)
+		suite.True(expectedErr == actualErr)
+
+		suite.Zero(testingT.Logs)
+		suite.Zero(testingT.Errors)
+		suite.Zero(testingT.Failures)
+		transport.AssertExpectations()
+	})
+
+	suite.Run("Fail", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "GET",
+				URL: &url.URL{
+					Path: "/test",
+				},
+				Header: http.Header{
+					"Test": {"true"},
+				},
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+		)
+
+		transport.OnMatchAll(
+			Path("/test"),
+			Methods("POST"),
+			Header("Test", "true"),
+		).Return(expected, expectedErr).Once()
+
+		suite.Panics(func() {
+			transport.RoundTrip(request)
+		})
+
+		suite.Zero(testingT.Logs)
+		suite.Equal(1, testingT.Errors)
+		suite.Equal(1, testingT.Failures)
+	})
+}
+
+func (suite *RoundTripperTestSuite) TestOnMatchAny() {
+	suite.Run("Pass", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "POST",
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+		)
+
+		transport.OnMatchAny(
+			Methods("POST"),
+			Path("/test"),
+			Header("Test", "true"),
+		).Return(expected, expectedErr).Once()
+		actual, actualErr := transport.RoundTrip(request)
+		suite.True(expected == actual)
+		suite.True(expectedErr == actualErr)
+
+		suite.Zero(testingT.Logs)
+		suite.Zero(testingT.Errors)
+		suite.Zero(testingT.Failures)
+		transport.AssertExpectations()
+	})
+
+	suite.Run("Fail", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "GET",
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+		)
+
+		transport.OnMatchAny(
+			Path("/test"),
+			Methods("POST"),
+			Header("Test", "true"),
+		).Return(expected, expectedErr).Once()
+
+		suite.Panics(func() {
+			transport.RoundTrip(request)
+		})
+
+		suite.Zero(testingT.Logs)
+		suite.Equal(1, testingT.Errors)
+		suite.Equal(1, testingT.Failures)
+	})
+}
+
+func (suite *RoundTripperTestSuite) TestCustomRun() {
+	suite.Run("NoAssertions", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "GET",
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+			runCalled   bool
+		)
+
+		transport.OnAny().Run(func(args mock.Arguments) {
+			runCalled = true
+		}).Return(expected, expectedErr).Once()
+
+		actual, actualErr := transport.RoundTrip(request)
+		suite.True(expected == actual)
+		suite.True(expectedErr == actualErr)
+		suite.True(runCalled)
+
+		suite.Zero(testingT.Logs)
+		suite.Zero(testingT.Errors)
+		suite.Zero(testingT.Failures)
+		transport.AssertExpectations()
+	})
+
+	suite.Run("AssertionsPass", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "GET",
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+			runCalled   bool
+		)
+
+		transport.OnAny().AssertRequest(
+			Methods("GET"),
+		).Run(func(args mock.Arguments) {
+			runCalled = true
+		}).Return(expected, expectedErr).Once()
+
+		actual, actualErr := transport.RoundTrip(request)
+		suite.True(expected == actual)
+		suite.True(expectedErr == actualErr)
+		suite.True(runCalled)
+
+		suite.Zero(testingT.Logs)
+		suite.Zero(testingT.Errors)
+		suite.Zero(testingT.Failures)
+		transport.AssertExpectations()
+	})
+
+	suite.Run("AssertionsFail", func() {
+		var (
+			testingT  = wrapTestingT(suite.T())
+			transport = NewRoundTripper(testingT)
+			request   = &http.Request{
+				Method: "GET",
+			}
+
+			expected    = new(http.Response)
+			expectedErr = errors.New("expected")
+			runCalled   bool
+		)
+
+		// if assertions fail, the run function should still execute
+		transport.OnAny().AssertRequest(
+			Methods("POST"),
+		).Run(func(args mock.Arguments) {
+			runCalled = true
+		}).Return(expected, expectedErr).Once()
+
+		actual, actualErr := transport.RoundTrip(request)
+		suite.True(expected == actual)
+		suite.True(expectedErr == actualErr)
+		suite.True(runCalled)
+
+		suite.Zero(testingT.Logs)
+		suite.Equal(1, testingT.Errors)
+		suite.Zero(testingT.Failures)
+		transport.AssertExpectations()
+	})
+}
+
 func TestRoundTripper(t *testing.T) {
 	suite.Run(t, new(RoundTripperTestSuite))
 }
@@ -250,9 +467,7 @@ func TestCloseIdler(t *testing.T) {
 	)
 
 	m.OnMatchAll(
-		func(r *http.Request) bool {
-			return r.URL.Path == "/testCloseIdler"
-		},
+		Path("/testCloseIdler"),
 	).Return(&http.Response{StatusCode: 288}, nil).Once()
 	m.OnCloseIdleConnections().Once()
 

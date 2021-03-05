@@ -12,10 +12,6 @@ import (
 // Used to start fluent expectation chains.
 const RoundTripMethodName = "RoundTrip"
 
-// RequestMatcher is a predicate used to match requests.  This is the same
-// function signature to be used with mock.MatchedBy.
-type RequestMatcher func(*http.Request) bool
-
 // RoundTripCall is syntactic sugar around a RoundTrip *mock.Call.
 // This type provides some higher-level and typesafe expectation
 // behavior.
@@ -32,7 +28,7 @@ type RoundTripCall struct {
 	// runFunc is the function that a client explicitly asked to be run.
 	runFunc func(mock.Arguments)
 
-	assertions []RequestAssertion
+	asserters []RequestAsserter
 }
 
 // newRoundTripCall properly initializes a RoundTripCall expectation.
@@ -51,7 +47,7 @@ func newRoundTripCall(container *RoundTripper, call *mock.Call) *RoundTripCall {
 // this function.
 func (rtc *RoundTripCall) run(args mock.Arguments) {
 	request, _ := args.Get(0).(*http.Request)
-	rtc.container.applyAssertions(request, rtc.assertions)
+	rtc.container.applyAsserters(request, rtc.asserters)
 
 	if rtc.runFunc != nil {
 		rtc.runFunc(args)
@@ -61,7 +57,6 @@ func (rtc *RoundTripCall) run(args mock.Arguments) {
 // Run establishes a run function for this mock.  This does not prevent
 // any assertions from running.
 func (rtc *RoundTripCall) Run(f func(mock.Arguments)) *RoundTripCall {
-	rtc.Call = rtc.Call.Run(f)
 	rtc.runFunc = f
 	return rtc
 }
@@ -77,8 +72,8 @@ func (rtc *RoundTripCall) Return(r *http.Response, err error) *RoundTripCall {
 //
 // Note that any global assertions on the mock that created this call will be
 // executed in addition to these assertions.
-func (rtc *RoundTripCall) AssertRequest(a ...RequestAssertion) *RoundTripCall {
-	rtc.assertions = append(rtc.assertions, a...)
+func (rtc *RoundTripCall) AssertRequest(a ...RequestAsserter) *RoundTripCall {
+	rtc.asserters = append(rtc.asserters, a...)
 	return rtc
 }
 
@@ -91,8 +86,8 @@ type RoundTripper struct {
 
 	t mock.TestingT
 
-	asserter   *assert.Assertions
-	assertions []RequestAssertion
+	assert    *assert.Assertions
+	asserters []RequestAsserter
 }
 
 // NewRoundTripper returns a mock http.RoundTripper for the given test.
@@ -122,7 +117,7 @@ func (m *RoundTripper) RoundTrip(request *http.Request) (*http.Response, error) 
 func (m *RoundTripper) Test(t mock.TestingT) {
 	m.Mock.Test(t)
 	m.t = t
-	m.asserter = assert.New(t)
+	m.assert = assert.New(t)
 }
 
 // AssertRequest adds request assertions that apply to all mocked calls created
@@ -131,20 +126,20 @@ func (m *RoundTripper) Test(t mock.TestingT) {
 // Setting global assertions simplifies cases where a mock is used for many
 // requests that all must have some similarity.  For example, a test case may
 // be testing something that always emits GET requests.
-func (m *RoundTripper) AssertRequest(a ...RequestAssertion) *RoundTripper {
-	m.assertions = append(m.assertions, a...)
+func (m *RoundTripper) AssertRequest(a ...RequestAsserter) *RoundTripper {
+	m.asserters = append(m.asserters, a...)
 	return m
 }
 
-// applyAssertions executes this mock's global assertions together with
+// applyAsserters executes this mock's global assertions together with
 // a slice of assertions defined on an individual Call expectation.
-func (m *RoundTripper) applyAssertions(candidate *http.Request, local []RequestAssertion) {
-	for _, a := range m.assertions {
-		a(m.asserter, candidate)
+func (m *RoundTripper) applyAsserters(candidate *http.Request, local []RequestAsserter) {
+	for _, a := range m.asserters {
+		a.Assert(m.assert, candidate)
 	}
 
 	for _, a := range local {
-		a(m.asserter, candidate)
+		a.Assert(m.assert, candidate)
 	}
 }
 
@@ -181,13 +176,13 @@ func (m *RoundTripper) OnRequest(request *http.Request) *RoundTripCall {
 // OnMatchAll starts a *mock.Call fluent chain that expects a RoundTrip
 // call with a request that matches all the given predicates.  If no
 // predicates are supplied, the returned expectation will match any request.
-func (m *RoundTripper) OnMatchAll(p ...RequestMatcher) *RoundTripCall {
+func (m *RoundTripper) OnMatchAll(rms ...RequestMatcher) *RoundTripCall {
 	return newRoundTripCall(
 		m,
 		m.On(RoundTripMethodName, mock.MatchedBy(
 			func(candidate *http.Request) bool {
-				for _, f := range p {
-					if !f(candidate) {
+				for _, rm := range rms {
+					if !rm.Match(candidate) {
 						return false
 					}
 				}
@@ -201,13 +196,13 @@ func (m *RoundTripper) OnMatchAll(p ...RequestMatcher) *RoundTripCall {
 // OnMatchAny starts a *mock.Call fluent chain expects a RoundTrip call
 // with a request that matches any of the given predicates.  If no predicates
 // are supplied, the returned expectation won't match any requests.
-func (m *RoundTripper) OnMatchAny(p ...RequestMatcher) *RoundTripCall {
+func (m *RoundTripper) OnMatchAny(rms ...RequestMatcher) *RoundTripCall {
 	return newRoundTripCall(
 		m,
 		m.On(RoundTripMethodName, mock.MatchedBy(
 			func(candidate *http.Request) bool {
-				for _, f := range p {
-					if f(candidate) {
+				for _, rm := range rms {
+					if rm.Match(candidate) {
 						return true
 					}
 				}
