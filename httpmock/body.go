@@ -22,7 +22,7 @@ type Closeable interface {
 
 // BodyReadCloser is a mock type that contains actual content but
 // tracks whether the body has been closed.  NopCloser doesn't record
-// whether Close was called, making it unusuable for verifying proper
+// whether Close was called, making it unusable for verifying proper
 // http.Response handling.
 type BodyReadCloser struct {
 	buffer *bytes.Buffer

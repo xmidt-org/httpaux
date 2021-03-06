@@ -19,7 +19,7 @@ type RequestMatcher interface {
 // RequestMatcherFunc allows closures to be used directly as RequestMatchers
 type RequestMatcherFunc func(*http.Request) bool
 
-// Match satisifes the RequestMatcher interface
+// Match satisfies the RequestMatcher interface
 func (rmf RequestMatcherFunc) Match(r *http.Request) bool {
 	return rmf(r)
 }
