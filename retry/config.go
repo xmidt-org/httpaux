@@ -35,7 +35,7 @@ type Config struct {
 	//
 	// If Multiplier is set to a positive value, typically greater than 1.0, then each
 	// successive retry waits an amount equal to Interval*(Multiplier^n), where n is
-	// the current retry.  Although a Multiplier of less than 1.0 is allowed, it's discouraged
+	// the current 0-based retry.  Although a Multiplier of less than 1.0 is allowed, it's discouraged
 	// since that means each retry waits less time than the previous retry.
 	//
 	// If a Jitter is set, then each retry's interval is multiplied by a random number
