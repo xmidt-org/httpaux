@@ -1,3 +1,4 @@
+//nolint:bodyclose // none of these test use a "real" response body
 package retry
 
 import (
