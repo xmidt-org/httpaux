@@ -30,16 +30,19 @@ type CloseIdleConnectionsTestSuite struct {
 }
 
 func (suite *CloseIdleConnectionsTestSuite) TestRoundTripper() {
-	m := new(httpmock.RoundTripper)
+	m := httpmock.NewRoundTripperSuite(suite)
 	CloseIdleConnections(m)
-	m.AssertExpectations(suite.T())
+	m.AssertExpectations()
 }
 
 func (suite *CloseIdleConnectionsTestSuite) TestCloseIdler() {
-	m := new(httpmock.CloseIdler)
+	m := &httpmock.CloseIdler{
+		RoundTripper: httpmock.NewRoundTripperSuite(suite),
+	}
+
 	m.OnCloseIdleConnections().Once()
 	CloseIdleConnections(m)
-	m.AssertExpectations(suite.T())
+	m.AssertExpectations()
 }
 
 func TestCloseIdleConnections(t *testing.T) {
@@ -70,7 +73,7 @@ func (suite *PreserveCloseIdlerTestSuite) BeforeTest(_, testName string) {
 
 func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 	var (
-		next      = new(httpmock.RoundTripper)
+		next      = httpmock.NewRoundTripperSuite(suite)
 		decorator = PreserveCloseIdler(
 			next,
 			Func(func(r *http.Request) (*http.Response, error) {
@@ -80,7 +83,7 @@ func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	next.OnRequest(suite.request).Once().Return(suite.response, suite.err)
 
 	response, err := decorator.RoundTrip(suite.request)
 	suite.Require().NotNil(response)
@@ -91,13 +94,15 @@ func (suite *PreserveCloseIdlerTestSuite) TestNoCloseIdler() {
 	_, ok := decorator.(CloseIdler)
 	suite.False(ok)
 
-	next.AssertExpectations(suite.T())
+	next.AssertExpectations()
 }
 
 func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 	var (
-		next       = new(httpmock.RoundTripper)
-		closeIdler = new(httpmock.CloseIdler)
+		next       = httpmock.NewRoundTripperSuite(suite)
+		closeIdler = &httpmock.CloseIdler{
+			RoundTripper: httpmock.NewRoundTripperSuite(suite),
+		}
 
 		decorator = PreserveCloseIdler(
 			next,
@@ -111,7 +116,7 @@ func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	next.OnRequest(suite.request).Return(suite.response, suite.err).Once()
 	closeIdler.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
@@ -123,13 +128,16 @@ func (suite *PreserveCloseIdlerTestSuite) TestDecoratedCloseIdler() {
 	suite.Require().Implements((*CloseIdler)(nil), decorator)
 	decorator.(CloseIdler).CloseIdleConnections()
 
-	next.AssertExpectations(suite.T())
-	closeIdler.AssertExpectations(suite.T())
+	next.AssertExpectations()
+	closeIdler.AssertExpectations()
 }
 
 func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 	var (
-		next      = new(httpmock.CloseIdler)
+		next = &httpmock.CloseIdler{
+			RoundTripper: httpmock.NewRoundTripperSuite(suite),
+		}
+
 		decorator = PreserveCloseIdler(
 			next,
 			Func(func(r *http.Request) (*http.Response, error) {
@@ -139,7 +147,7 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	next.OnRequest(suite.request).Once().Return(suite.response, suite.err)
 	next.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
@@ -151,13 +159,15 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextCloseIdler() {
 	suite.Require().Implements((*CloseIdler)(nil), decorator)
 	decorator.(CloseIdler).CloseIdleConnections()
 
-	next.AssertExpectations(suite.T())
+	next.AssertExpectations()
 }
 
 func (suite *PreserveCloseIdlerTestSuite) TestNextDecorator() {
 	var (
-		next       = new(httpmock.RoundTripper)
-		closeIdler = new(httpmock.CloseIdler)
+		next       = httpmock.NewRoundTripperSuite(suite)
+		closeIdler = &httpmock.CloseIdler{
+			RoundTripper: httpmock.NewRoundTripperSuite(suite),
+		}
 
 		decorator = PreserveCloseIdler(
 			Decorator{
@@ -171,7 +181,7 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextDecorator() {
 	)
 
 	suite.Require().NotNil(decorator)
-	next.OnRoundTrip(suite.request).Once().Return(suite.response, suite.err)
+	next.OnRequest(suite.request).Once().Return(suite.response, suite.err)
 	closeIdler.OnCloseIdleConnections().Once()
 
 	response, err := decorator.RoundTrip(suite.request)
@@ -183,8 +193,8 @@ func (suite *PreserveCloseIdlerTestSuite) TestNextDecorator() {
 	suite.Require().Implements((*CloseIdler)(nil), decorator)
 	decorator.(CloseIdler).CloseIdleConnections()
 
-	next.AssertExpectations(suite.T())
-	closeIdler.AssertExpectations(suite.T())
+	next.AssertExpectations()
+	closeIdler.AssertExpectations()
 }
 
 func TestPreserveCloseIdler(t *testing.T) {
