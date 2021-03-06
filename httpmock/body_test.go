@@ -53,7 +53,6 @@ func (suite *BodyReadCloserTestSuite) TestBodyString() {
 }
 
 func (suite *BodyReadCloserTestSuite) TestBodyf() {
-	const bodyContents = "some lovely content here"
 	body := Bodyf("Format string: %d", 123)
 	suite.testBodyReadCloser(body, []byte(fmt.Sprintf("Format string: %d", 123)))
 }
