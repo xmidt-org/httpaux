@@ -16,6 +16,14 @@ type RequestMatcher interface {
 	Match(*http.Request) bool
 }
 
+// RequestMatcherFunc allows closures to be used directly as RequestMatchers
+type RequestMatcherFunc func(*http.Request) bool
+
+// Match satisifes the RequestMatcher interface
+func (rmf RequestMatcherFunc) Match(r *http.Request) bool {
+	return rmf(r)
+}
+
 // RequestAsserter executes assertions against requests.  Implementations are
 // used in mock.Run functions to verify that a request is in the correct state.
 // This is sometimes preferable to matching, which is done before an expectation
@@ -25,6 +33,14 @@ type RequestAsserter interface {
 	// is used in mock.Run functions to verify a request after an expectation
 	// has been matched.
 	Assert(*assert.Assertions, *http.Request)
+}
+
+// RequestAsserterFunc allows closures to be used directly as RequestAsserters
+type RequestAsserterFunc func(*assert.Assertions, *http.Request)
+
+// Assert satisfies the RequestAsserter interface
+func (raf RequestAsserterFunc) Assert(a *assert.Assertions, r *http.Request) {
+	raf(a, r)
 }
 
 // RequestChecker is a combined strategy for both matching HTTP requests

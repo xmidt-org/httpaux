@@ -19,6 +19,35 @@ type RequestCheckerTestSuite struct {
 	suite.Suite
 }
 
+func (suite *RequestCheckerTestSuite) TestRequestMatcherFunc() {
+	expected := new(http.Request)
+	var called bool
+
+	rmf := RequestMatcherFunc(func(actual *http.Request) bool {
+		suite.True(expected == actual)
+		called = true
+		return true
+	})
+
+	suite.True(rmf.Match(expected))
+	suite.True(called)
+}
+
+func (suite *RequestCheckerTestSuite) TestRequestAsserterFunc() {
+	expectedAssert := new(assert.Assertions)
+	expectedRequest := new(http.Request)
+	var called bool
+
+	raf := RequestAsserterFunc(func(actualAssert *assert.Assertions, actualRequest *http.Request) {
+		suite.True(expectedAssert == actualAssert)
+		suite.True(expectedRequest == actualRequest)
+		called = true
+	})
+
+	raf.Assert(expectedAssert, expectedRequest)
+	suite.True(called)
+}
+
 func (suite *RequestCheckerTestSuite) TestNopRequestChecker() {
 	suite.Run("Match", func() {
 		suite.True(
