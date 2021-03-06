@@ -270,9 +270,11 @@ func (suite *ClientTestSuite) testGetBodyError(c httpaux.Client, rt *httpmock.Ro
 
 	suite.Nil(actual) // nil response when GetBody returns an error
 	suite.True(httpmock.Closed(body))
-	suite.IsType((*GetBodyError)(nil), actualErr)
-	suite.NotEmpty(actualErr.Error())
-	suite.Equal(getBodyErr, actualErr.(*GetBodyError).Err)
+
+	var gbe *GetBodyError
+	suite.Require().True(errors.As(actualErr, &gbe))
+	suite.NotEmpty(gbe.Error())
+	suite.Equal(getBodyErr, gbe.Err)
 }
 
 func (suite *ClientTestSuite) TestGetBodyError() {
