@@ -62,7 +62,9 @@ type NopRequestChecker struct{}
 func (nrc NopRequestChecker) Match(*http.Request) bool { return true }
 
 // Assert does nothing.
-func (nrc NopRequestChecker) Assert(*assert.Assertions, *http.Request) {}
+func (nrc NopRequestChecker) Assert(*assert.Assertions, *http.Request) {
+	// this is a nop function, to be used in place of nil
+}
 
 type methods []string
 
