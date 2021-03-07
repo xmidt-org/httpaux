@@ -12,9 +12,9 @@ with New:
     Interval: 10 * time.Second,
   })
 
-  c := &http.Client{
-    Transport: ctor(new(http.Transport)), // can also pass nil to take the default transport
-  }
+  c := ctor(&http.Client{
+	  // setup the client
+  })
 
 Exponential backoff with jitter is also supported.  For example:
 
