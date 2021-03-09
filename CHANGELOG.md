@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 - allow http.Client to be decorated as with http.RoundTripper
 - cleaned up middleware
+- retry package allows linear and exponential backoff for HTTP clients
 
 ## [v0.1.1]
 - Moved gate functionality to a subpackage

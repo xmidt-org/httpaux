@@ -2,6 +2,7 @@ package httpaux
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -76,4 +77,24 @@ func (e *Error) MarshalJSON() ([]byte, error) {
 	o.WriteString(`"}`)
 
 	return o.Bytes(), nil
+}
+
+// IsTemporary tests if the given error is marked as a temporary error.
+// This method returns true if the given error or what the error wraps
+// exposes a Temporary() bool method that returns true.
+//
+// This function uses errors.As to traverse the error wrappers.
+//
+// See: https://pkg.go.dev/net/#Error
+func IsTemporary(err error) bool {
+	type temporary interface {
+		Temporary() bool
+	}
+
+	var te temporary
+	if errors.As(err, &te) {
+		return te.Temporary()
+	}
+
+	return false
 }

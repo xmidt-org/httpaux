@@ -43,16 +43,18 @@ func testHeaderThen(t *testing.T, h Header, expected http.Header) {
 }
 
 func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
+	// TODO: this depends on a subpackage.  probably should refactor so that
+	// doesn't happen
 	var (
 		assert  = assert.New(t)
 		require = require.New(t)
 
-		next      = new(httpmock.RoundTripper)
+		next      = httpmock.NewRoundTripper(t)
 		request   = httptest.NewRequest("GET", "/", nil)
 		decorated = h.RoundTrip(next)
 	)
 
-	next.OnRoundTrip(request).Return(&http.Response{StatusCode: 284, Body: httpmock.EmptyBody()}, nil).Once()
+	next.OnRequest(request).Return(&http.Response{StatusCode: 284, Body: httpmock.EmptyBody()}, nil).Once()
 	require.NotNil(decorated)
 	response, err := decorated.RoundTrip(request)
 	require.NotNil(response)
@@ -60,7 +62,7 @@ func testHeaderRoundTrip(t *testing.T, h Header, expected http.Header) {
 	assert.Equal(284, response.StatusCode)
 	assert.NoError(err)
 
-	next.AssertExpectations(t)
+	next.AssertExpectations()
 }
 
 func testHeaderRoundTripDefault(t *testing.T) {
