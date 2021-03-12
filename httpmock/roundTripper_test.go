@@ -3,7 +3,10 @@ package httpmock
 
 import (
 	"errors"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -15,6 +18,54 @@ import (
 
 type RoundTripperTestSuite struct {
 	suite.Suite
+
+	// server is used to test delegations
+	server *httptest.Server
+}
+
+var _ suite.SetupAllSuite = (*RoundTripperTestSuite)(nil)
+var _ suite.TearDownAllSuite = (*RoundTripperTestSuite)(nil)
+
+// assertResponse verifies that the response came from the handler method
+func (suite *RoundTripperTestSuite) assertResponse(r *http.Response) {
+	suite.Require().NotNil(r)
+
+	if suite.NotNil(r.Body) {
+		defer r.Body.Close()
+		b, err := ioutil.ReadAll(r.Body)
+		if suite.NoError(err) {
+			suite.Equal("RoundTripperTestSuite", string(b))
+		}
+	}
+
+	suite.Equal(
+		"true",
+		r.Header.Get("RoundTripperTestSuite"),
+	)
+
+	suite.Equal(299, r.StatusCode)
+}
+
+func (suite *RoundTripperTestSuite) newRequest(method, url string, body io.Reader) *http.Request {
+	r, err := http.NewRequest(method, url, body)
+	suite.Require().NoError(err)
+	return r
+}
+
+func (suite *RoundTripperTestSuite) handler(rw http.ResponseWriter, r *http.Request) {
+	rw.Header().Set("RoundTripperTestSuite", "true")
+	rw.WriteHeader(299)
+	rw.Write([]byte("RoundTripperTestSuite"))
+}
+
+func (suite *RoundTripperTestSuite) SetupSuite() {
+	suite.server = httptest.NewServer(
+		http.HandlerFunc(suite.handler),
+	)
+}
+
+func (suite *RoundTripperTestSuite) TearDownSuite() {
+	suite.server.Close()
 }
 
 func (suite *RoundTripperTestSuite) TestSuite() {
@@ -437,6 +488,46 @@ func (suite *RoundTripperTestSuite) TestCustomRun() {
 		suite.Equal(1, testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
+	})
+}
+
+func (suite *RoundTripperTestSuite) TestNext() {
+	suite.Run("Nil", func() {
+		var (
+			testingT = wrapTestingT(suite.T())
+			rt       = NewRoundTripper(testingT)
+		)
+
+		rt.Next(nil) // this should be valid, as it will use http.DefaultTransport
+		rt.OnAny()   // no return needed, since we set a Next
+
+		response, err := rt.RoundTrip(suite.newRequest("GET", suite.server.URL+"/test", nil))
+		suite.NoError(err)
+		suite.assertResponse(response)
+
+		rt.AssertExpectations()
+		suite.Equal(1, testingT.Logs)
+		suite.Zero(testingT.Errors)
+		suite.Zero(testingT.Failures)
+	})
+
+	suite.Run("Custom", func() {
+		var (
+			testingT = wrapTestingT(suite.T())
+			rt       = NewRoundTripper(testingT)
+		)
+
+		rt.Next(new(http.Transport))
+		rt.OnAny() // no return needed, since we set a Next
+
+		response, err := rt.RoundTrip(suite.newRequest("GET", suite.server.URL+"/test", nil))
+		suite.NoError(err)
+		suite.assertResponse(response)
+
+		rt.AssertExpectations()
+		suite.Equal(1, testingT.Logs)
+		suite.Zero(testingT.Errors)
+		suite.Zero(testingT.Failures)
 	})
 }
 

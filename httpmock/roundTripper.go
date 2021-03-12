@@ -62,6 +62,10 @@ func (rtc *RoundTripCall) Run(f func(mock.Arguments)) *RoundTripCall {
 }
 
 // Return establishes the return values for this RoundTrip invocation.
+//
+// If this method is not used, the Next round tripper set on the container
+// will be used to generate the return.  If no Next has been set, this
+// Call will fail the test when invoked.
 func (rtc *RoundTripCall) Return(r *http.Response, err error) *RoundTripCall {
 	rtc.Call = rtc.Call.Return(r, err)
 	return rtc
@@ -78,11 +82,15 @@ func (rtc *RoundTripCall) AssertRequest(a ...RequestAsserter) *RoundTripCall {
 }
 
 // RoundTripper is a mocked http.RoundTripper.  Instances should be
-// created with NewRoundTripper.
+// created with NewRoundTripper or NewRoundTripperSuite.
 //
-// This type does not front all the Mock methods, only the most common ones.
+// This type alters the Mock API slightly, since each instance is tied
+// to a mock.TestingT instance.
 type RoundTripper struct {
 	mock.Mock
+
+	// next is the delegate to which round trip calls are forwarded
+	next http.RoundTripper
 
 	t mock.TestingT
 
@@ -104,13 +112,31 @@ func NewRoundTripperSuite(s suite.TestingSuite) *RoundTripper {
 
 // RoundTrip implements http.RoundTripper and is driven by the mock's expectations.
 func (m *RoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	arguments := m.Called(request)
+	if len(arguments) == 0 && m.next != nil {
+		return m.next.RoundTrip(request)
+	}
+
 	var (
-		arguments = m.Called(request)
-		first, _  = arguments.Get(0).(*http.Response)
-		err, _    = arguments.Get(1).(error)
+		first, _ = arguments.Get(0).(*http.Response)
+		err, _   = arguments.Get(1).(error)
 	)
 
 	return first, err
+}
+
+// Next sets a delegate for this round tripper.  For any Calls that do not
+// have an associated Return, this next instance will be used.
+//
+// If next is nil, http.DefaultTransport is used instead.
+func (m *RoundTripper) Next(next http.RoundTripper) *RoundTripper {
+	if next != nil {
+		m.next = next
+	} else {
+		m.next = http.DefaultTransport
+	}
+
+	return m
 }
 
 // Test changes the test instance on this mock.
