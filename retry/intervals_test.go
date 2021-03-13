@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
@@ -18,6 +19,16 @@ type mockRandom struct {
 func (m *mockRandom) Int63n(v int64) int64 {
 	arguments := m.Called(v)
 	return arguments.Get(0).(int64)
+}
+
+func TestRandomFunc(t *testing.T) {
+	assert := assert.New(t)
+	rf := RandomFunc(func(actual int64) int64 {
+		assert.Equal(int64(123), actual)
+		return 456
+	})
+
+	assert.Equal(int64(456), rf.Int63n(123))
 }
 
 type IntervalsTestSuite struct {

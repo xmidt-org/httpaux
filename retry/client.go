@@ -17,7 +17,12 @@ type GetBodyError struct {
 	Err error
 }
 
-// Error fulfills the error interface
+// Unwrap returns the actual error returned from GetBody.
+func (err *GetBodyError) Unwrap() error {
+	return err.Err
+}
+
+// Error fulfills the error interface.
 func (err *GetBodyError) Error() string {
 	var o strings.Builder
 	o.WriteString("GetBody returned an error: [")
@@ -167,7 +172,15 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 		}
 
 		response, err = c.next.Do(original.WithContext(retryCtx))
-		if !c.check(response, err) {
+		if err != nil && retryCtx.Err() != nil {
+			// either the original request context has been canceled or
+			// MaxElapsedTime has been reached.  in either case, we don't
+			// want to invoke the check since that can give false positives.
+			// For example, context.DeadlineExceeded is a Temporary error.
+
+			httpaux.Cleanup(response) // just in case we have a misbehaving next client
+			return nil, retryCtx.Err()
+		} else if !c.check(response, err) {
 			// NOTE: leave this response's Body alone, so callers can see it
 			return response, err
 		}

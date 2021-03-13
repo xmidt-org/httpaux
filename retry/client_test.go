@@ -4,6 +4,8 @@ package retry
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 	"github.com/xmidt-org/httpaux/httpmock"
 )
@@ -521,6 +524,215 @@ func (suite *ClientTestSuite) TestRetries() {
 			})
 		})
 	}
+}
+
+func (suite *ClientTestSuite) TestContextCancel() {
+	suite.T().Logf("When the calling context is canceled, retries should short circuit")
+
+	type result struct {
+		response *http.Response
+		err      error
+	}
+
+	suite.Run("DuringTimerWait", func() {
+		var (
+			waiting = make(chan struct{})
+			timer   = make(chan time.Time)
+
+			stopCalled = false
+			stop       = func() bool {
+				stopCalled = true
+				return true
+			}
+
+			rt     = httpmock.NewRoundTripperSuite(suite)
+			client = New(
+				Config{
+					Retries:  1,
+					Interval: 5 * time.Second,
+					Check: func(*http.Response, error) bool {
+						return true
+					},
+					Timer: func(d time.Duration) (<-chan time.Time, func() bool) {
+						suite.Equal(5*time.Second, d)
+
+						// this lets the test goroutine know that the timer is being used
+						defer close(waiting)
+						return timer, stop
+					},
+				},
+				&http.Client{
+					Transport: rt,
+				},
+			)
+		)
+
+		suite.Require().Equal(1, client.Retries())
+		rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
+
+		requestCtx, cancel := context.WithCancel(context.Background())
+		request, err := http.NewRequestWithContext(requestCtx, "GET", "/test", nil)
+		suite.Require().NoError(err)
+		suite.Require().NotNil(request)
+
+		results := make(chan result, 1)
+		go func() {
+			defer close(results)
+			var result result
+			result.response, result.err = client.Do(request)
+			results <- result
+		}()
+
+		select {
+		case <-waiting:
+			// passing
+		case <-time.After(2 * time.Second):
+			cancel() // cleanup, to try and avoid deadlock on a failed test
+			suite.Require().Fail("The Timer function was not called")
+		}
+
+		// now, cancel the request context
+		cancel()
+		select {
+		case r := <-results:
+			suite.ErrorIs(r.err, context.Canceled)
+			suite.Nil(r.response)
+		case <-time.After(2 * time.Second):
+			suite.Require().Fail("No results posted")
+		}
+
+		suite.True(stopCalled)
+		rt.AssertExpectations()
+	})
+
+	suite.Run("DuringDo", func() {
+		var (
+			waiting = make(chan struct{})
+			timer   = make(chan time.Time, 1)
+
+			stopCalled = false
+			stop       = func() bool {
+				stopCalled = true
+				return true
+			}
+
+			rt     = httpmock.NewRoundTripperSuite(suite)
+			client = New(
+				Config{
+					Retries:  1,
+					Interval: 16 * time.Second,
+					Check: func(*http.Response, error) bool {
+						return true
+					},
+					Timer: func(d time.Duration) (<-chan time.Time, func() bool) {
+						timer <- time.Time{} // no waiting
+						return timer, stop
+					},
+				},
+				&http.Client{
+					Transport: rt,
+				},
+			)
+		)
+
+		suite.Require().Equal(1, client.Retries())
+
+		// initial attempt
+		rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
+
+		// on the second attempt we cancel the context
+		requestCtx, cancel := context.WithCancel(context.Background())
+		rt.OnAny().AssertRequest(httpmock.Path("/test")).
+			Return(nil, errors.New("expected")).
+			Run(func(mock.Arguments) {
+				defer close(waiting) // let the test goroutine know we're in the retry
+				cancel()
+			}).
+			Once()
+
+		request, err := http.NewRequestWithContext(requestCtx, "GET", "/test", nil)
+		suite.Require().NoError(err)
+		suite.Require().NotNil(request)
+
+		results := make(chan result, 1)
+		go func() {
+			defer close(results)
+			var result result
+			result.response, result.err = client.Do(request)
+			results <- result
+		}()
+
+		select {
+		case <-waiting:
+			// passing
+		case <-time.After(2 * time.Second):
+			cancel() // cleanup, to try and avoid deadlock on a failed test
+			suite.Require().Fail("The retry never happened")
+		}
+
+		select {
+		case r := <-results:
+			suite.ErrorIs(r.err, context.Canceled)
+			suite.Nil(r.response)
+		case <-time.After(2 * time.Second):
+			suite.Require().Fail("No results posted")
+		}
+
+		suite.False(stopCalled)
+		rt.AssertExpectations()
+	})
+}
+
+func (suite *ClientTestSuite) TestGetBodyError() {
+	var (
+		timer = make(chan time.Time, 1)
+
+		stopCalled = false
+		stop       = func() bool {
+			stopCalled = true
+			return true
+		}
+
+		rt     = httpmock.NewRoundTripperSuite(suite)
+		client = New(
+			Config{
+				Retries:  1,
+				Interval: 18 * time.Minute,
+				Check: func(*http.Response, error) bool {
+					return true
+				},
+				Timer: func(d time.Duration) (<-chan time.Time, func() bool) {
+					timer <- time.Time{} // no waiting
+					return timer, stop
+				},
+			},
+			&http.Client{
+				Transport: rt,
+			},
+		)
+
+		expectedErr = errors.New("expected wrapped GetBody error")
+	)
+
+	request, err := http.NewRequest("GET", "/test", nil)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(request)
+	request.GetBody = func() (io.ReadCloser, error) {
+		return nil, expectedErr
+	}
+
+	// initial attempt
+	rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
+
+	response, err := client.Do(request)
+	suite.False(stopCalled)
+	rt.AssertExpectations()
+
+	suite.Nil(response)
+	var getBodyErr *GetBodyError
+	suite.Require().True(errors.As(err, &getBodyErr))
+	suite.NotEmpty(getBodyErr.Error())
+	suite.ErrorIs(getBodyErr, expectedErr)
 }
 
 func TestClient(t *testing.T) {
