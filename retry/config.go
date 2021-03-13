@@ -54,10 +54,6 @@ type Config struct {
 	// [1-Jitter, 1+Jitter].  That is, the Jitter is a percentage above and below the
 	// base interval.
 	//
-	// Note that the internal algorithm avoids floating point math in favor of fixed point.
-	// Only (3) decimal places to the right of the Jitter value are supported, e.g. 0.25
-	// is honored, but 0.623541 would be truncated to 0.624.
-	//
 	// If this field is not in the open range (0.0, 1.0), no jitter is used.
 	Jitter float64 `json:"jitter" yaml:"jitter"`
 

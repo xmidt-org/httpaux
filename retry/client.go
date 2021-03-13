@@ -12,6 +12,9 @@ import (
 
 // GetBodyError indicates that http.Request.GetBody returned an error.  Retries
 // cannot continue in this case, since the original request body is unavailable.
+//
+// A request may not have GetBody set.  In that case, a Client will not attempt
+// to refresh the body before each retry.
 type GetBodyError struct {
 	// Err is the error returned from GetBody
 	Err error
@@ -126,12 +129,12 @@ func (c *Client) initialize(original *http.Request) (s *State, retryCtx context.
 // Do takes in an original *http.Request and makes an initial attempt plus
 // a maximum number of retries in order to satisfy the request.
 //
-// If no retries are configured, this method will still enforce the MaxElapsedTime
-// and will still place a State into the context for decorated clients.
+// For each request, a State instance is put into the request's context that
+// allows decorated clients to access information about the current attempt.
+// Decorated code an obtain this State with a call to GetState.
 //
-// IMPORTANT: This method can return both a non-nil response and a non-nil error.
-// To be consistent with CheckRedirect, in this case the response's Body has already
-// been drained and closed.  The *http.Response.Body field will be nil in that case.
+// Event if no retries are configured, this method will still enforce the MaxElapsedTime
+// and will still place a State into the context for decorated clients.
 func (c *Client) Do(original *http.Request) (*http.Response, error) {
 	state, retryCtx, cancel := c.initialize(original)
 	defer cancel()
