@@ -32,12 +32,11 @@ type Check func(*http.Response, error) bool
 //   - The error is not nil and:
 //       supplies a "Temporary() bool" method that returns true (including any wrapped errors)
 //
-// An important consequence of honoring the Temporary() method on errors is that transient
-// network errors will be retried.  One important example of this are DNS errors that are marked as temporary.
+// A consequence of honoring the Temporary() method on errors is that transient network errors
+// will be retried.  Examples of this include DNS errors that are marked as temporary.
 //
 // In all other cases, this default function returns false.  Importantly, this means
-// that context.DeadlineExceeded and context.Canceled are not retryable errors when
-// using this check function.
+// that context.Canceled errors are not retryable errors when using this check function.
 func DefaultCheck(r *http.Response, err error) bool {
 	if r != nil {
 		switch r.StatusCode {

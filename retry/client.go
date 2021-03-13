@@ -131,10 +131,10 @@ func (c *Client) initialize(original *http.Request) (s *State, retryCtx context.
 //
 // For each request, a State instance is put into the request's context that
 // allows decorated clients to access information about the current attempt.
-// Decorated code an obtain this State with a call to GetState.
+// Decorated code can obtain this State with a call to GetState.
 //
-// Event if no retries are configured, this method will still enforce the MaxElapsedTime
-// and will still place a State into the context for decorated clients.
+// Event if no retries are configured, this method will still enforce any MaxElapsedTime
+// that was set.  It will also still place a State into the context for decorated clients.
 func (c *Client) Do(original *http.Request) (*http.Response, error) {
 	state, retryCtx, cancel := c.initialize(original)
 	defer cancel()
