@@ -14,6 +14,14 @@ type Random interface {
 
 var _ Random = (*rand.Rand)(nil)
 
+// RandomFunc is a closure type that implements Random.
+type RandomFunc func(int64) int64
+
+// Int63n satisfies the Random interface.
+func (rf RandomFunc) Int63n(v int64) int64 {
+	return rf(v)
+}
+
 // interval is a precomputed retry interval
 type interval struct {
 	// base is the base duration to wait until retrying this attempt

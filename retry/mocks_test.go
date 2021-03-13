@@ -72,6 +72,13 @@ func (v *verifier) Check(*http.Response, error) bool {
 	return v.checkCount <= v.expectedRetries
 }
 
+// AlwaysCheck is a Config.Check that always returns true, but still tracks
+// number of calls for AssertExpectations.
+func (v *verifier) AlwaysCheck(response *http.Response, err error) bool {
+	v.Check(response, err)
+	return true
+}
+
 // Int63n implements Random and always returns 0 so that timer durations
 // are predictable.
 func (v *verifier) Int63n(jitter int64) int64 {
