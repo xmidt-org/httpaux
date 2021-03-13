@@ -1,24 +1,21 @@
 /*
 Package retry implements retry logic for HTTP clients.
 
-The Client type can be used directly and instantiated with NewClient.
-This function returns nil if the Config is configured for no retries.
+The Client type can be used directly and instantiated with New.
 
-The preferred way to use this package is by creating a middleware constructor
-with New:
-
-  ctor := New(Config{
+  client := New(Config{
     Retries: 2,
     Interval: 10 * time.Second,
-  })
+  }, nil) // uses http.DefaultClient
 
-  c := ctor(&http.Client{
-	  // setup the client
-  })
+A Client can also be used as client middleware via its Then method.
+
+  client := New(Config{})
+  decorated := client.Then(new(http.Client))
 
 Exponential backoff with jitter is also supported.  For example:
 
-  ctor := New(Config{
+  client := New(Config{
     Retries: 2,
     Interval: 10 * time.Second,
     Multiplier: 2.0,
