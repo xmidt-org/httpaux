@@ -62,7 +62,7 @@ type Client struct {
 }
 
 // New constructs a Client from a configuration.  If cfg.Retries
-// is nonpositive, the returned client will do retries.
+// is nonpositive, the returned client will not do retries.
 //
 // The next instance is used to actually execute HTTP transactions.  If next
 // is nil, http.DefaultClient is used.
