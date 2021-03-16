@@ -8,32 +8,24 @@ import (
 	"time"
 
 	"github.com/xmidt-org/httpaux"
-	"github.com/xmidt-org/httpaux/client"
 )
-
-// NoGetBodyError indicates that the initial attempt at an HTTP transaction required
-// a retry but that the *http.Request had no GetBody field.
-//
-// If an initial attempt succeeded (i.e. did NOT require a retry), the GetBody field
-// is ignored.  This error only occurs if retries were required.
-type NoGetBodyError struct {
-	// Initial is the error from the initial Do(request)
-	Initial error
-}
-
-// Error fulfills the error interface
-func (err *NoGetBodyError) Error() string {
-	return "http.Request.GetBody must be set in order to retry the transaction"
-}
 
 // GetBodyError indicates that http.Request.GetBody returned an error.  Retries
 // cannot continue in this case, since the original request body is unavailable.
+//
+// A request may not have GetBody set.  In that case, a Client will not attempt
+// to refresh the body before each retry.
 type GetBodyError struct {
 	// Err is the error returned from GetBody
 	Err error
 }
 
-// Error fulfills the error interface
+// Unwrap returns the actual error returned from GetBody.
+func (err *GetBodyError) Unwrap() error {
+	return err.Err
+}
+
+// Error fulfills the error interface.
 func (err *GetBodyError) Error() string {
 	var o strings.Builder
 	o.WriteString("GetBody returned an error: [")
@@ -42,37 +34,15 @@ func (err *GetBodyError) Error() string {
 	return o.String()
 }
 
-// New creates a middleware constructor that decorates an HTTP client
-// for retries.  If cfg.Retries is nonpositive, the returned constructor does
-// no decoration.  This function is the primary and recommended way
-// to implement HTTP client retry behavior.
+// Client is an httpaux.Client that retries HTTP transactions.  Instances can be used
+// in (2) ways:
 //
-// The returned constructor will decorate http.DefaultClient if passed a nil
-// client.
-func New(cfg Config) client.Constructor {
-	prototype := NewClient(cfg, nil)
-	if prototype == nil {
-		return func(next httpaux.Client) httpaux.Client {
-			return next
-		}
-	}
-
-	return func(next httpaux.Client) httpaux.Client {
-		// now we can just clone the prototype and set the next member
-		c := new(Client)
-		*c = *prototype
-
-		// if next == nil, then we leave the next set to http.DefaultClient
-		if next != nil {
-			c.next = next
-		}
-
-		return c
-	}
-}
-
-// Client is an httpaux.Client that retries HTTP transactions.  The middleware
-// returned by New uses this type to perform retries.
+// (1) Client.Do can execute HTTP transactions using whatever retry semantics were
+// defined in New.  If Config.Retries was nonpositive, the Client won't perform any
+// retries.
+//
+// (2) Client.Then can be used as client middleware to attach retry semantics
+// to other HTTP clients.
 type Client struct {
 	// next is the decorated client used to execute HTTP transactions
 	next httpaux.Client
@@ -94,34 +64,23 @@ type Client struct {
 	check Check
 }
 
-// NewClient constructs a Client from a configuration.  If cfg.Retries
-// is nonpositive, this function returns nil.
+// New constructs a Client from a configuration.  If cfg.Retries
+// is nonpositive, the returned client will not do retries.
 //
 // The next instance is used to actually execute HTTP transactions.  If next
 // is nil, http.DefaultClient is used.
-//
-// This function is a low-level way to instantiate a client.  Most users
-// will instead create a middleware with New.  This function can be used
-// for more detailed usage.
-func NewClient(cfg Config, next httpaux.Client) *Client {
-	intervals := newIntervals(cfg)
-
-	// if no retries are configured, that means decoration is disabled
-	if len(intervals) == 0 {
-		return nil
-	}
-
-	if next == nil {
-		next = http.DefaultClient
-	}
-
-	c := &Client{
+func New(cfg Config, next httpaux.Client) (c *Client) {
+	c = &Client{
 		next:           next,
 		maxElapsedTime: cfg.MaxElapsedTime,
-		intervals:      intervals,
+		intervals:      newIntervals(cfg),
 		random:         cfg.Random,
 		timer:          cfg.Timer,
 		check:          cfg.Check,
+	}
+
+	if c.next == nil {
+		c.next = http.DefaultClient
 	}
 
 	if c.random == nil {
@@ -139,12 +98,12 @@ func NewClient(cfg Config, next httpaux.Client) *Client {
 		c.check = DefaultCheck
 	}
 
-	return c
+	return
 }
 
 // Retries returns the maximum number of retries this Client will attempt.
-// This does not include the initial attempt.  This method will never return
-// a nonpositive value.
+// This does not include the initial attempt.  If nonpositive, then no retries
+// will be attempted.
 //
 // The State instance returned by GetState will reflect this same value.
 func (c *Client) Retries() int {
@@ -170,32 +129,25 @@ func (c *Client) initialize(original *http.Request) (s *State, retryCtx context.
 // Do takes in an original *http.Request and makes an initial attempt plus
 // a maximum number of retries in order to satisfy the request.
 //
-// IMPORTANT: This method can return both a non-nil response and a non-nil error.
-// To be consistent with CheckRedirect, in this case the response's Body has already
-// been drained and closed.  The *http.Response.Body field will be nil in that case.
+// For each request, a State instance is put into the request's context that
+// allows decorated clients to access information about the current attempt.
+// Decorated code can obtain this State with a call to GetState.
+//
+// Event if no retries are configured, this method will still enforce any MaxElapsedTime
+// that was set.  It will also still place a State into the context for decorated clients.
 func (c *Client) Do(original *http.Request) (*http.Response, error) {
 	state, retryCtx, cancel := c.initialize(original)
 	defer cancel()
 
 	// make the initial attempt
+	// if no retries were configured, we won't even bother to invoke the check
 	response, err := c.next.Do(original.WithContext(retryCtx))
-	if !c.check(response, err) {
+	if len(c.intervals) == 0 || !c.check(response, err) {
 		// NOTE: leave this response's Body alone, so callers can see it
 		return response, err
 	}
 
-	// we need a GetBody so that we can replay the body for each retry
-	// this is similar to how an http.Client handles 3XX redirects
 	getBody := original.GetBody
-	if getBody == nil {
-		httpaux.Cleanup(response) // consistent with CheckRedirect
-		if response != nil {
-			response.Body = nil
-		}
-
-		return response, &NoGetBodyError{Initial: err}
-	}
-
 	for i := 0; i < c.Retries(); i++ {
 		wait := c.intervals.duration(c.random, i)
 		tc, stop := c.timer(wait)
@@ -213,14 +165,25 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 			// continue
 		}
 
-		body, err := getBody()
-		if err != nil {
-			return nil, &GetBodyError{Err: err}
+		if getBody != nil {
+			body, err := getBody()
+			if err != nil {
+				return nil, &GetBodyError{Err: err}
+			}
+
+			original.Body = body
 		}
 
-		original.Body = body
 		response, err = c.next.Do(original.WithContext(retryCtx))
-		if !c.check(response, err) {
+		if err != nil && retryCtx.Err() != nil {
+			// either the original request context has been canceled or
+			// MaxElapsedTime has been reached.  in either case, we don't
+			// want to invoke the check since that can give false positives.
+			// For example, context.DeadlineExceeded is a Temporary error.
+
+			httpaux.Cleanup(response) // just in case we have a misbehaving next client
+			return nil, retryCtx.Err()
+		} else if !c.check(response, err) {
 			// NOTE: leave this response's Body alone, so callers can see it
 			return response, err
 		}
@@ -228,4 +191,17 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 
 	// NOTE: leave this response's Body alone, so callers can see it
 	return response, err
+}
+
+// Then is a client middleware that decorates another client with this
+// instance's retry semantics.  If next is nil, http.DefaultClient is decorated.
+func (c *Client) Then(next httpaux.Client) httpaux.Client {
+	clone := new(Client)
+	*clone = *c
+	clone.next = next
+	if clone.next == nil {
+		clone.next = http.DefaultClient
+	}
+
+	return clone
 }

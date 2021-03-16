@@ -5,407 +5,734 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
-	"github.com/xmidt-org/httpaux"
 	"github.com/xmidt-org/httpaux/httpmock"
 )
 
 type ClientTestSuite struct {
 	suite.Suite
+
+	transport *http.Transport
+	server    *httptest.Server
+	serverURL string
+
+	// expected is a request that the handler should compare against
+	expected *http.Request
+
+	// expectedBody is the next request body the handler should expect
+	expectedBody string
 }
 
-// newRequest creates a standard HTTP request for testing.  Since the request data itself
-// shouldn't change between retry attempts, we can just use a canonical request with the
-// same state for every test.
-func (suite *ClientTestSuite) newRequest() *http.Request {
-	r, err := http.NewRequest("GET", "/test", bytes.NewBufferString("test request"))
+var _ suite.SetupAllSuite = (*ClientTestSuite)(nil)
+var _ suite.TearDownAllSuite = (*ClientTestSuite)(nil)
+
+func (suite *ClientTestSuite) SetupSuite() {
+	suite.transport = new(http.Transport)
+	suite.server = httptest.NewServer(
+		http.HandlerFunc(suite.handler),
+	)
+
+	suite.serverURL = suite.server.URL + "/test"
+}
+
+// stateAsserter is a factory for a RequestAsserter that checks the contextual State.
+func (suite *ClientTestSuite) stateAsserter(attempt, retries int) httpmock.RequestAsserterFunc {
+	return func(a *assert.Assertions, r *http.Request) {
+		s := GetState(r.Context())
+		suite.Require().NotNil(s)
+
+		suite.Equal(attempt, s.Attempt())
+		suite.Equal(retries, s.Retries())
+
+		previous, err := s.Previous()
+		suite.NoError(err) // no tests return errors
+		if attempt == 0 {
+			suite.Nil(previous)
+		} else {
+			suite.Require().NotNil(previous)
+			suite.Nil(previous.Body)
+		}
+	}
+}
+
+// mockSequence mocks out the sequence of calls that will be made to a round tripper given
+// an expected number of retries.  the total retries are used to assert that the State is correct.
+func (suite *ClientTestSuite) mockSequence(rt *httpmock.RoundTripper, expected, total int) {
+	// each attempt, which will always have at least 1 try which is the initial try
+	for x := 0; x <= expected; x++ {
+		rt.OnAny().AssertRequest(suite.stateAsserter(x, total)).Once()
+	}
+}
+
+func (suite *ClientTestSuite) TearDownSuite() {
+	suite.server.Close()
+	suite.transport.CloseIdleConnections()
+}
+
+// handler is the HTTP handler that receives our requests.  This method writes a
+// known response and verifies the request against the expected fields.
+func (suite *ClientTestSuite) handler(rw http.ResponseWriter, actual *http.Request) {
+	suite.Equal(suite.expected.Method, actual.Method)
+	suite.Equal(suite.expected.URL.Path, actual.URL.Path)
+	suite.Equal(int64(len(suite.expectedBody)), actual.ContentLength)
+
+	b, err := ioutil.ReadAll(actual.Body)
+	suite.NoError(err)
+	suite.Equal(suite.expectedBody, string(b))
+
+	// add some known items to the response
+	rw.Header().Set("ClientTestSuite", "true")
+	rw.WriteHeader(299)
+	rw.Write([]byte("ClientTestSuite"))
+}
+
+// assertResponse verifies that the response came through from our handler
+// reasonably unchanged.
+func (suite *ClientTestSuite) assertResponse(r *http.Response) {
+	suite.Require().NotNil(r)
+	suite.Equal(299, r.StatusCode)
+	suite.Equal("true", r.Header.Get("ClientTestSuite"))
+
+	suite.Require().NotNil(r.Body)
+	defer r.Body.Close()
+	b, err := ioutil.ReadAll(r.Body)
+	suite.NoError(err)
+	suite.Equal("ClientTestSuite", string(b))
+}
+
+// setupRequest initializes a new request for the handler method to verify.
+func (suite *ClientTestSuite) setupRequest(method string, body string) *http.Request {
+	var (
+		r   *http.Request
+		err error
+	)
+
+	if len(body) > 0 {
+		r, err = http.NewRequest(method, suite.serverURL+"/test", bytes.NewBufferString(body))
+	} else {
+		r, err = http.NewRequest(method, suite.serverURL+"/test", nil)
+	}
+
 	suite.Require().NoError(err)
-	r.Header.Set("Test", "true")
+	suite.Require().NotNil(r)
+
+	suite.expected = r.WithContext(context.Background()) // make a safe clone
+	suite.expectedBody = body
+
 	return r
 }
 
-// mockRoundTripper creates a mock with global assertions appropriate for newRequest.
-func (suite *ClientTestSuite) mockRoundTripper() *httpmock.RoundTripper {
-	return httpmock.NewRoundTripperSuite(suite).
-		AssertRequest(
-			httpmock.Methods("GET"),
-			httpmock.Path("/test"),
-			httpmock.Header("Test", "true"),
-		)
+// checkNeverCalled is a Check that asserts that it shouldn't be called, as
+// in 0 retries were configured.
+func (suite *ClientTestSuite) checkNeverCalled(*http.Response, error) bool {
+	suite.Fail("The Check strategy should never have been called")
+	return false
 }
 
-// mockClient produces a "real" http.Client with a mocked round tripper setup
-// via mockRoundTripper.
-func (suite *ClientTestSuite) mockClient() (httpaux.Client, *httpmock.RoundTripper) {
-	rt := suite.mockRoundTripper()
-	return &http.Client{Transport: rt}, rt
+// timerNeverCalled is a Timer that asserts that it shouldn't be called, which is
+// the case when 0 retries were configured.
+func (suite *ClientTestSuite) timerNeverCalled(time.Duration) (<-chan time.Time, func() bool) {
+	suite.Fail("The Timer strategy should never have been called")
+
+	// create a closed timer channel to prevent failing tests from deadlocking
+	c := make(chan time.Time)
+	close(c)
+	return c, func() bool { return true }
 }
 
-// assertBody is a helper function for verifying a response body
-func (suite *ClientTestSuite) assertBody(expected string, r *http.Response) {
-	suite.Require().NotNil(r)
-	suite.Require().NotNil(r.Body)
-
-	var actual bytes.Buffer
-	_, err := io.Copy(&actual, r.Body)
-	suite.Require().NoError(err)
-	suite.Equal(expected, actual.String())
-}
-
-func (suite *ClientTestSuite) TestNoRetries() {
-	suite.Run("New", func() {
-		c, _ := suite.mockClient()
-		decorated := New(Config{})(c)
-		suite.Equal(c, decorated)
-	})
-
-	suite.Run("NewClient", func() {
-		c, _ := suite.mockClient()
-		suite.Nil(NewClient(Config{}, c))
-	})
-}
-
-func (suite *ClientTestSuite) testDoSuccess(c httpaux.Client, rt *httpmock.RoundTripper, totalRetries, retries int) {
-	suite.Require().NotNil(c)
-	suite.Require().NotNil(rt)
-
-	for attempt := 0; attempt <= retries; attempt++ {
-		attempt := attempt
-		rt.OnAny().Return(&http.Response{
-			StatusCode: 200,
-			Body:       httpmock.Bodyf("attempt %d", attempt),
-		}, nil).Run(func(args mock.Arguments) {
-			r := args.Get(0).(*http.Request)
-			s := GetState(r.Context())
-			suite.Require().NotNil(s)
-			suite.Equal(attempt, s.Attempt())
-			suite.Equal(totalRetries, s.Retries())
-
-			previous, previousErr := s.Previous()
-			suite.NoError(previousErr) // we're never returning errors in these tests
-			if attempt == 0 {
-				suite.Nil(previous)
-			} else {
-				suite.NotNil(previous)
-				suite.Nil(previous.Body)
-			}
-		}).Once()
-	}
-
-	actual, actualErr := c.Do(suite.newRequest())
-	suite.NoError(actualErr)
-	suite.assertBody(fmt.Sprintf("attempt %d", retries), actual)
-	rt.AssertExpectations()
+// randomNeverCalled is a Random that asserts that it shouldn't be called, which is
+// the case when 0 retries were configured.
+func (suite *ClientTestSuite) randomNeverCalled(int64) int64 {
+	suite.Fail("The Random strategy should never have been called")
+	return 0
 }
 
 func (suite *ClientTestSuite) TestDefaults() {
-	suite.Run("New", func() {
-		c, rt := suite.mockClient()
-		c = New(Config{
-			Retries: 1,
-		})(c)
+	suite.T().Logf("Using a zero value for Config and nil for the decorated client should be valid")
+	suite.Run("Do", func() {
+		var (
+			client = New(Config{}, nil)
 
-		suite.testDoSuccess(c, rt, 1, 0)
+			requestCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+			expected           = suite.setupRequest("GET", "").WithContext(requestCtx)
+		)
+
+		defer cancel()
+		suite.Zero(client.Retries())
+
+		response, err := client.Do(expected)
+		suite.NoError(err)
+		suite.assertResponse(response)
 	})
 
-	suite.Run("NewClient", func() {
-		c, rt := suite.mockClient()
-		c = NewClient(Config{
-			Retries: 1,
-		}, c)
+	suite.Run("Then", func() {
+		var (
+			client = New(Config{}, nil).Then(nil)
 
-		suite.testDoSuccess(c, rt, 1, 0)
+			requestCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+			expected           = suite.setupRequest("GET", "").WithContext(requestCtx)
+		)
+
+		defer cancel()
+
+		response, err := client.Do(expected)
+		suite.NoError(err)
+		suite.assertResponse(response)
 	})
 }
 
-func (suite *ClientTestSuite) TestDoSuccess() {
-	testData := []struct {
-		cfg     Config
-		retries int
+func (suite *ClientTestSuite) TestNoRetries() {
+	suite.T().Logf("No retries are configured.  Only (1) attempt should be made.")
+	testCases := []struct {
+		cfg    Config
+		method string
+		body   string
 	}{
 		{
-			cfg: Config{
-				Retries: 1,
-			},
-			retries: 0,
+			cfg:    Config{},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg:    Config{},
+			method: "POST",
+			body:   "a lovely POST'ed body",
 		},
 		{
 			cfg: Config{
-				Retries: 1,
+				Retries: -1, // should still be no retries
 			},
-			retries: 1,
+			method: "DELETE",
+			body:   "",
 		},
 		{
 			cfg: Config{
-				Retries: 2,
+				Retries: -1, // should still be no retries
 			},
-			retries: 1,
+			method: "POST",
+			body:   "a lovely POST'ed body",
 		},
 		{
 			cfg: Config{
-				Retries:    2,
-				Multiplier: 2.0,
+				MaxElapsedTime: 10 * time.Second,
 			},
-			retries: 1,
+			method: "DELETE",
+			body:   "",
 		},
 		{
 			cfg: Config{
-				Retries:    3,
-				Multiplier: 1.5,
-				Jitter:     0.1,
+				MaxElapsedTime: 10 * time.Second,
 			},
-			retries: 2,
+			method: "POST",
+			body:   "a lovely POST'ed body",
 		},
 		{
 			cfg: Config{
-				Retries:        5,
-				Multiplier:     3.7,
-				Jitter:         0.3,
-				MaxElapsedTime: 5 * time.Minute,
+				Interval:   5 * time.Second,
+				Jitter:     0.2,
+				Multiplier: 2.5,
 			},
-			retries: 3,
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Interval:   5 * time.Second,
+				Jitter:     0.2,
+				Multiplier: 2.5,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
 		},
 	}
 
-	for i, record := range testData {
-		suite.Run(strconv.Itoa(i), func() {
-			suite.Run("New", func() {
-				v := newVerifier(suite.T(), record.cfg, record.retries)
-				record.cfg.Check = v.Check
-				record.cfg.Random = v
-				record.cfg.Timer = v.Timer
+	for i, testCase := range testCases {
+		testCase.cfg.Check = suite.checkNeverCalled
+		testCase.cfg.Timer = suite.timerNeverCalled
+		testCase.cfg.Random = RandomFunc(suite.randomNeverCalled)
 
-				c, rt := suite.mockClient()
-				c = New(record.cfg)(c)
-				suite.testDoSuccess(c, rt, record.cfg.Retries, record.retries)
-				v.AssertExpectations()
+		suite.Run(strconv.Itoa(i), func() {
+			suite.Run("Do", func() {
+				var (
+					rt     = httpmock.NewRoundTripperSuite(suite).Next(suite.transport)
+					client = New(testCase.cfg, &http.Client{
+						Transport: rt,
+					})
+				)
+
+				suite.Require().Zero(client.Retries())
+				suite.mockSequence(rt, 0, 0)
+				response, err := client.Do(suite.setupRequest(testCase.method, testCase.body))
+				suite.NoError(err)
+				suite.assertResponse(response)
+
+				rt.AssertExpectations()
 			})
 
-			suite.Run("NewClient", func() {
-				v := newVerifier(suite.T(), record.cfg, record.retries)
-				record.cfg.Check = v.Check
-				record.cfg.Random = v
-				record.cfg.Timer = v.Timer
+			suite.Run("Then", func() {
+				var (
+					rt     = httpmock.NewRoundTripperSuite(suite).Next(suite.transport)
+					client = New(testCase.cfg, nil).Then(&http.Client{
+						Transport: rt,
+					})
+				)
 
-				c, rt := suite.mockClient()
-				c = NewClient(record.cfg, c)
-				suite.testDoSuccess(c, rt, record.cfg.Retries, record.retries)
-				v.AssertExpectations()
+				suite.mockSequence(rt, 0, 0)
+				response, err := client.Do(suite.setupRequest(testCase.method, testCase.body))
+				suite.NoError(err)
+				suite.assertResponse(response)
+
+				rt.AssertExpectations()
 			})
 		})
 	}
 }
 
-func (suite *ClientTestSuite) testNoGetBody(c httpaux.Client, rt *httpmock.RoundTripper) {
-	body := httpmock.BodyString("first attempt")
-	expected := &http.Response{
-		Body: body,
+func (suite *ClientTestSuite) TestRetries() {
+	suite.T().Logf("Retries execute and properly terminate.")
+	testCases := []struct {
+		cfg    Config
+		method string
+		body   string
+	}{
+		{
+			cfg: Config{
+				Retries: 2,
+			},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Retries: 3,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       17 * time.Second,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       17 * time.Second,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       15 * time.Minute,
+				Multiplier:     1.75,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       15 * time.Minute,
+				Multiplier:     1.75,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       22 * time.Second,
+				Jitter:         0.2,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       22 * time.Second,
+				Jitter:         0.2,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       2 * time.Minute,
+				Multiplier:     2.5,
+				Jitter:         0.3,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "DELETE",
+			body:   "",
+		},
+		{
+			cfg: Config{
+				Retries:        3,
+				Interval:       2 * time.Minute,
+				Multiplier:     2.5,
+				Jitter:         0.3,
+				MaxElapsedTime: 10 * time.Second,
+			},
+			method: "POST",
+			body:   "a lovely POST'ed body",
+		},
 	}
 
-	rt.OnAny().Return(expected, nil).Once()
+	for i, testCase := range testCases {
+		suite.Run(strconv.Itoa(i), func() {
+			suite.Run("AlwaysCheck", func() {
+				suite.T().Logf("The Check strategy never returns false, forcing the retries to elapse")
+				suite.Run("Do", func() {
+					cfg := testCase.cfg
+					v := newVerifier(suite.T(), cfg, cfg.Retries)
+					cfg.Check = v.AlwaysCheck
+					cfg.Timer = v.Timer
+					cfg.Random = v
 
-	request := suite.newRequest()
-	request.GetBody = nil // force this error
-	actual, actualErr := c.Do(request)
+					var (
+						rt = httpmock.NewRoundTripperSuite(suite).Next(suite.transport)
 
-	suite.True(expected == actual)
-	suite.Nil(actual.Body)
-	suite.True(httpmock.Closed(body))
-	suite.IsType((*NoGetBodyError)(nil), actualErr)
-	suite.NotEmpty(actualErr.Error())
-	rt.AssertExpectations()
+						client = New(cfg, &http.Client{
+							Transport: rt,
+						})
+					)
+
+					suite.Equal(cfg.Retries, client.Retries())
+					suite.mockSequence(rt, cfg.Retries, cfg.Retries)
+					response, err := client.Do(suite.setupRequest(testCase.method, testCase.body))
+					suite.NoError(err)
+					suite.assertResponse(response)
+
+					rt.AssertExpectations()
+					v.AssertExpectations()
+				})
+
+				suite.Run("Then", func() {
+					cfg := testCase.cfg
+					v := newVerifier(suite.T(), cfg, cfg.Retries)
+					cfg.Check = v.AlwaysCheck
+					cfg.Timer = v.Timer
+					cfg.Random = v
+
+					var (
+						rt = httpmock.NewRoundTripperSuite(suite).Next(suite.transport)
+
+						client = New(cfg, nil).Then(&http.Client{
+							Transport: rt,
+						})
+					)
+
+					suite.mockSequence(rt, cfg.Retries, cfg.Retries)
+					response, err := client.Do(suite.setupRequest(testCase.method, testCase.body))
+					suite.NoError(err)
+					suite.assertResponse(response)
+
+					rt.AssertExpectations()
+					v.AssertExpectations()
+				})
+			})
+
+			suite.Run("OneRetry", func() {
+				suite.T().Logf("The initial attempt fails, but the first retry succeeds.")
+				suite.Run("Do", func() {
+					cfg := testCase.cfg
+					v := newVerifier(suite.T(), cfg, 1)
+					cfg.Check = v.Check
+					cfg.Timer = v.Timer
+					cfg.Random = v
+
+					var (
+						rt = httpmock.NewRoundTripperSuite(suite).Next(suite.transport)
+
+						client = New(cfg, &http.Client{
+							Transport: rt,
+						})
+					)
+
+					suite.Equal(testCase.cfg.Retries, client.Retries())
+					suite.mockSequence(rt, 1, cfg.Retries)
+					response, err := client.Do(suite.setupRequest(testCase.method, testCase.body))
+					suite.NoError(err)
+					suite.assertResponse(response)
+
+					rt.AssertExpectations()
+					v.AssertExpectations()
+				})
+
+				suite.Run("Then", func() {
+					cfg := testCase.cfg
+					v := newVerifier(suite.T(), cfg, 1)
+					cfg.Check = v.Check
+					cfg.Timer = v.Timer
+					cfg.Random = v
+
+					var (
+						rt = httpmock.NewRoundTripperSuite(suite).Next(suite.transport)
+
+						client = New(cfg, nil).Then(&http.Client{
+							Transport: rt,
+						})
+					)
+
+					suite.mockSequence(rt, 1, cfg.Retries)
+					response, err := client.Do(suite.setupRequest(testCase.method, testCase.body))
+					suite.NoError(err)
+					suite.assertResponse(response)
+
+					rt.AssertExpectations()
+					v.AssertExpectations()
+				})
+			})
+		})
+	}
 }
 
-func (suite *ClientTestSuite) TestNoGetBody() {
-	cfg := Config{
-		Retries: 2,
-		Check: func(*http.Response, error) bool {
-			return true
-		},
-		Timer: func(time.Duration) (<-chan time.Time, func() bool) {
-			suite.Require().Fail("Timer should not have been called")
-			tc := make(chan time.Time)
-			close(tc) // avoid deadlocks on failed tests
-			return tc, func() bool { return true }
-		},
-	}
-
-	suite.Run("New", func() {
-		c, rt := suite.mockClient()
-		c = New(cfg)(c)
-		suite.testNoGetBody(c, rt)
-	})
-
-	suite.Run("NewClient", func() {
-		c, rt := suite.mockClient()
-		c = NewClient(cfg, c)
-		suite.testNoGetBody(c, rt)
-	})
-}
-
-func (suite *ClientTestSuite) testGetBodyError(c httpaux.Client, rt *httpmock.RoundTripper) {
-	body := httpmock.BodyString("first attempt")
-	expected := &http.Response{
-		Body: body,
-	}
-
-	rt.OnAny().Return(expected, nil).Once()
-
-	getBodyErr := errors.New("expected error from GetBody")
-	request := suite.newRequest()
-	request.GetBody = func() (io.ReadCloser, error) {
-		// force an error
-		return nil, getBodyErr
-	}
-	actual, actualErr := c.Do(request)
-	rt.AssertExpectations()
-
-	suite.Nil(actual) // nil response when GetBody returns an error
-	suite.True(httpmock.Closed(body))
-
-	var gbe *GetBodyError
-	suite.Require().True(errors.As(actualErr, &gbe))
-	suite.NotEmpty(gbe.Error())
-	suite.Equal(getBodyErr, gbe.Err)
-}
-
-func (suite *ClientTestSuite) TestGetBodyError() {
-	cfg := Config{
-		Retries: 2,
-		Check: func(*http.Response, error) bool {
-			return true
-		},
-		Timer: func(time.Duration) (<-chan time.Time, func() bool) {
-			tc := make(chan time.Time)
-			close(tc)
-			return tc, func() bool { return true }
-		},
-	}
-
-	suite.Run("New", func() {
-		c, rt := suite.mockClient()
-		c = New(cfg)(c)
-		suite.testGetBodyError(c, rt)
-	})
-
-	suite.Run("NewClient", func() {
-		c, rt := suite.mockClient()
-		c = NewClient(cfg, c)
-		suite.testGetBodyError(c, rt)
-	})
-}
-
-func (suite *ClientTestSuite) testCanceled(c httpaux.Client, rt *httpmock.RoundTripper) {
-	body := httpmock.BodyString("first attempt")
-	expected := &http.Response{
-		Body: body,
-	}
-
-	rt.OnAny().Return(expected, nil).Once()
-
-	request := suite.newRequest()
-	ctx, cancel := context.WithCancel(request.Context())
-	request = request.WithContext(ctx)
-
-	ready := make(chan struct{})
+func (suite *ClientTestSuite) TestContextCancel() {
+	suite.T().Logf("When the calling context is canceled, retries should short circuit")
 
 	type result struct {
 		response *http.Response
 		err      error
 	}
 
-	results := make(chan result)
+	suite.Run("DuringTimerWait", func() {
+		var (
+			waiting = make(chan struct{})
+			timer   = make(chan time.Time)
 
-	go func() {
-		close(ready)
-		var result result
-		result.response, result.err = c.Do(request)
-		results <- result
-	}()
+			stopCalled = false
+			stop       = func() bool {
+				stopCalled = true
+				return true
+			}
 
-	select {
-	case <-ready:
-		// passing
+			rt     = httpmock.NewRoundTripperSuite(suite)
+			client = New(
+				Config{
+					Retries:  1,
+					Interval: 5 * time.Second,
+					Check: func(*http.Response, error) bool {
+						return true
+					},
+					Timer: func(d time.Duration) (<-chan time.Time, func() bool) {
+						suite.Equal(5*time.Second, d)
+
+						// this lets the test goroutine know that the timer is being used
+						defer close(waiting)
+						return timer, stop
+					},
+				},
+				&http.Client{
+					Transport: rt,
+				},
+			)
+		)
+
+		suite.Require().Equal(1, client.Retries())
+		rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
+
+		requestCtx, cancel := context.WithCancel(context.Background())
+		request, err := http.NewRequestWithContext(requestCtx, "GET", "/test", nil)
+		suite.Require().NoError(err)
+		suite.Require().NotNil(request)
+
+		results := make(chan result, 1)
+		go func() {
+			defer close(results)
+			var result result
+			result.response, result.err = client.Do(request)
+			results <- result
+		}()
+
+		select {
+		case <-waiting:
+			// passing
+		case <-time.After(2 * time.Second):
+			cancel() // cleanup, to try and avoid deadlock on a failed test
+			suite.Require().Fail("The Timer function was not called")
+		}
+
+		// now, cancel the request context
 		cancel()
-	case <-time.After(2 * time.Second):
-		cancel() // cleanup after a failed test
-		suite.Require().Fail("Goroutine for client.Do never signaled readiness")
-		return
-	}
+		select {
+		case r := <-results:
+			suite.ErrorIs(r.err, context.Canceled)
+			suite.Nil(r.response)
+		case <-time.After(2 * time.Second):
+			suite.Require().Fail("No results posted")
+		}
 
-	var r result
-	select {
-	case r = <-results:
-		// passing
-	case <-time.After(2 * time.Second):
-		suite.Require().Fail("No Do result was returned")
-		return
-	}
+		suite.True(stopCalled)
+		rt.AssertExpectations()
+	})
 
-	suite.Nil(r.response)
-	suite.True(httpmock.Closed(body))
-	suite.True(errors.Is(r.err, context.Canceled))
+	suite.Run("DuringDo", func() {
+		var (
+			waiting = make(chan struct{})
+			timer   = make(chan time.Time, 1)
+
+			stopCalled = false
+			stop       = func() bool {
+				stopCalled = true
+				return true
+			}
+
+			rt     = httpmock.NewRoundTripperSuite(suite)
+			client = New(
+				Config{
+					Retries:  1,
+					Interval: 16 * time.Second,
+					Check: func(*http.Response, error) bool {
+						return true
+					},
+					Timer: func(d time.Duration) (<-chan time.Time, func() bool) {
+						timer <- time.Time{} // no waiting
+						return timer, stop
+					},
+				},
+				&http.Client{
+					Transport: rt,
+				},
+			)
+		)
+
+		suite.Require().Equal(1, client.Retries())
+
+		// initial attempt
+		rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
+
+		// on the second attempt we cancel the context
+		requestCtx, cancel := context.WithCancel(context.Background())
+		rt.OnAny().AssertRequest(httpmock.Path("/test")).
+			Return(nil, errors.New("expected")).
+			Run(func(mock.Arguments) {
+				defer close(waiting) // let the test goroutine know we're in the retry
+				cancel()
+			}).
+			Once()
+
+		request, err := http.NewRequestWithContext(requestCtx, "GET", "/test", nil)
+		suite.Require().NoError(err)
+		suite.Require().NotNil(request)
+
+		results := make(chan result, 1)
+		go func() {
+			defer close(results)
+			var result result
+			result.response, result.err = client.Do(request)
+			results <- result
+		}()
+
+		select {
+		case <-waiting:
+			// passing
+		case <-time.After(2 * time.Second):
+			cancel() // cleanup, to try and avoid deadlock on a failed test
+			suite.Require().Fail("The retry never happened")
+		}
+
+		select {
+		case r := <-results:
+			suite.ErrorIs(r.err, context.Canceled)
+			suite.Nil(r.response)
+		case <-time.After(2 * time.Second):
+			suite.Require().Fail("No results posted")
+		}
+
+		suite.False(stopCalled)
+		rt.AssertExpectations()
+	})
 }
 
-func (suite *ClientTestSuite) TestCanceled() {
-	cfg := Config{
-		Retries: 1,
-		Check: func(*http.Response, error) bool {
+func (suite *ClientTestSuite) TestGetBodyError() {
+	var (
+		timer = make(chan time.Time, 1)
+
+		stopCalled = false
+		stop       = func() bool {
+			stopCalled = true
 			return true
-		},
-		Timer: func(time.Duration) (<-chan time.Time, func() bool) {
-			// this time channel intentionally prevents the timer case from executing
-			return make(chan time.Time), func() bool { return true }
-		},
+		}
+
+		rt     = httpmock.NewRoundTripperSuite(suite)
+		client = New(
+			Config{
+				Retries:  1,
+				Interval: 18 * time.Minute,
+				Check: func(*http.Response, error) bool {
+					return true
+				},
+				Timer: func(d time.Duration) (<-chan time.Time, func() bool) {
+					timer <- time.Time{} // no waiting
+					return timer, stop
+				},
+			},
+			&http.Client{
+				Transport: rt,
+			},
+		)
+
+		expectedErr = errors.New("expected wrapped GetBody error")
+	)
+
+	request, err := http.NewRequest("GET", "/test", nil)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(request)
+	request.GetBody = func() (io.ReadCloser, error) {
+		return nil, expectedErr
 	}
 
-	suite.Run("New", func() {
-		c, rt := suite.mockClient()
-		c = New(cfg)(c)
-		suite.testCanceled(c, rt)
-	})
+	// initial attempt
+	rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
 
-	suite.Run("NewClient", func() {
-		c, rt := suite.mockClient()
-		c = NewClient(cfg, c)
-		suite.testCanceled(c, rt)
-	})
-}
+	response, err := client.Do(request)
+	suite.False(stopCalled)
+	rt.AssertExpectations()
 
-func (suite *ClientTestSuite) TestRetriesExceeded() {
-	cfg := Config{
-		Retries: 2,
-		Check: func(*http.Response, error) bool {
-			// unconditionally force all retries, so that our retry count
-			// is guaranteed to expire
-			return true
-		},
-		Timer: func(time.Duration) (<-chan time.Time, func() bool) {
-			tc := make(chan time.Time)
-			close(tc)
-			return tc, func() bool { return true }
-		},
-	}
-
-	suite.Run("New", func() {
-		c, rt := suite.mockClient()
-		c = New(cfg)(c)
-		suite.testDoSuccess(c, rt, cfg.Retries, cfg.Retries)
-	})
-
-	suite.Run("NewClient", func() {
-		c, rt := suite.mockClient()
-		c = NewClient(cfg, c)
-		suite.testDoSuccess(c, rt, cfg.Retries, cfg.Retries)
-	})
+	suite.Nil(response)
+	var getBodyErr *GetBodyError
+	suite.Require().True(errors.As(err, &getBodyErr))
+	suite.NotEmpty(getBodyErr.Error())
+	suite.ErrorIs(getBodyErr, expectedErr)
 }
 
 func TestClient(t *testing.T) {

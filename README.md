@@ -21,6 +21,8 @@ httpaux augments golang's `net/http` package with a few extra goodies.
 - An efficient, immutable Header type for writing static headers
 - A configurable `ConstantHandler` that writes hardcoded information to responses
 - `Error` which can be used to wrap service and middleware errors in a form that makes rendering responses easier.  This type is compatible with frameworks like `go-kit`.
+- `httpmock` package for mock-style testing with HTTP clients
+- `retry` package with configurable retry for clients including exponential backoff
 
 ## Table of Contents
 
