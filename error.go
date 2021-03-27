@@ -2,6 +2,8 @@ package httpaux
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,16 +67,11 @@ func (e *Error) Headers() http.Header {
 // is marshaled as "cause".  If the Message field is set, it is marshaled as "message".
 func (e *Error) MarshalJSON() ([]byte, error) {
 	var o bytes.Buffer
-	o.WriteRune('{')
 	if len(e.Message) > 0 {
-		o.WriteString(`"message": "`)
-		o.WriteString(e.Message)
-		o.WriteString(`", `)
+		fmt.Fprintf(&o, `{"code": %d, "message": "%s", "cause": "%s"}`, e.StatusCode(), e.Message, e.Err.Error())
+	} else {
+		fmt.Fprintf(&o, `{"code": %d, "cause": "%s"}`, e.StatusCode(), e.Err.Error())
 	}
-
-	o.WriteString(`"cause": "`)
-	o.WriteString(e.Err.Error())
-	o.WriteString(`"}`)
 
 	return o.Bytes(), nil
 }
@@ -97,4 +94,59 @@ func IsTemporary(err error) bool {
 	}
 
 	return false
+}
+
+// EncodeError is a gokit-style error coder for server code that consistently
+// writes JSON for all errors.  The builtin gokit error encoder will write text/plain
+// for anything it doesn't recognize, giving rise to inconsistent messages when
+// some errors implement json.Marshaler and others do not.
+//
+// This function also honors embedded errors via the errors package.  If any error
+// in the chain provides the specialized methods such as StatusCode, that error is used
+// for that portion of the HTTP response.
+func EncodeError(_ context.Context, err error, rw http.ResponseWriter) {
+	type headerer interface {
+		Headers() http.Header
+	}
+
+	var h headerer
+	if errors.As(err, &h) {
+		headers := h.Headers()
+		for name := range headers {
+			name = http.CanonicalHeaderKey(name)
+			rw.Header()[name] = append(rw.Header()[name], headers[name]...)
+		}
+	}
+
+	// always write JSON
+	rw.Header().Set("Content-Type", "application/json")
+
+	type statusCoder interface {
+		StatusCode() int
+	}
+
+	code := http.StatusInternalServerError
+	var sc statusCoder
+	if errors.As(err, &sc) {
+		code = sc.StatusCode()
+	}
+
+	rw.WriteHeader(code)
+
+	var m json.Marshaler
+	if errors.As(err, &m) {
+		body, marshalErr := m.MarshalJSON()
+		if marshalErr == nil {
+			rw.Write(body)
+			return
+		}
+	}
+
+	// fallback to a simple JSON message
+	fmt.Fprintf(
+		rw,
+		`{"code": %d, "cause": "%s"}`,
+		code,
+		err.Error(),
+	)
 }
