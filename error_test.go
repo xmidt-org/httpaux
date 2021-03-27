@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 func testErrorSimple(t *testing.T) {
@@ -31,7 +34,7 @@ func testErrorSimple(t *testing.T) {
 	msg, marshalErr := json.Marshal(err)
 	require.NoError(marshalErr)
 	assert.JSONEq(
-		`{"cause": "expected"}`,
+		`{"code": 500, "cause": "expected"}`,
 		string(msg),
 	)
 }
@@ -65,7 +68,7 @@ func testErrorNoMessage(t *testing.T) {
 	msg, marshalErr := json.Marshal(err)
 	require.NoError(marshalErr)
 	assert.JSONEq(
-		`{"cause": "expected"}`,
+		`{"code": 404, "cause": "expected"}`,
 		string(msg),
 	)
 }
@@ -101,7 +104,7 @@ func testErrorCustomMessage(t *testing.T) {
 	msg, marshalErr := json.Marshal(err)
 	require.NoError(marshalErr)
 	assert.JSONEq(
-		`{"message": "test", "cause": "expected"}`,
+		`{"code": 404, "message": "test", "cause": "expected"}`,
 		string(msg),
 	)
 }
@@ -140,4 +143,78 @@ func TestIsTemporary(t *testing.T) {
 	assert.True(
 		IsTemporary(context.DeadlineExceeded),
 	)
+}
+
+type EncodeErrorSuite struct {
+	suite.Suite
+
+	response *httptest.ResponseRecorder
+}
+
+var _ suite.SetupTestSuite = (*EncodeErrorSuite)(nil)
+
+func (suite *EncodeErrorSuite) SetupTest() {
+	suite.response = httptest.NewRecorder()
+}
+
+func (suite *EncodeErrorSuite) TestSimple() {
+	EncodeError(
+		context.Background(),
+		errors.New("expected"),
+		suite.response,
+	)
+
+	result := suite.response.Result() //nolint:bodyclose
+	suite.Equal(http.StatusInternalServerError, result.StatusCode)
+	suite.Equal(
+		http.Header{
+			"Content-Type": {"application/json"},
+		},
+		result.Header,
+	)
+
+	body, err := io.ReadAll(result.Body)
+	suite.Require().NoError(err)
+
+	suite.JSONEq(
+		`{"code": 500, "cause": "expected"}`,
+		string(body),
+	)
+}
+
+func (suite *EncodeErrorSuite) TestCustom() {
+	EncodeError(
+		context.Background(),
+		&Error{
+			Code:    506,
+			Err:     errors.New("expected"),
+			Message: "here is an error",
+			Header: http.Header{
+				"Custom": {"true"},
+			},
+		},
+		suite.response,
+	)
+
+	result := suite.response.Result() //nolint:bodyclose
+	suite.Equal(506, result.StatusCode)
+	suite.Equal(
+		http.Header{
+			"Content-Type": {"application/json"},
+			"Custom":       {"true"},
+		},
+		result.Header,
+	)
+
+	body, err := io.ReadAll(result.Body)
+	suite.Require().NoError(err)
+
+	suite.JSONEq(
+		`{"code": 506, "message": "here is an error", "cause": "expected"}`,
+		string(body),
+	)
+}
+
+func TestErrorEncoder(t *testing.T) {
+	suite.Run(t, new(EncodeErrorSuite))
 }
