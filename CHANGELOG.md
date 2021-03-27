@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- more consistent ErrorEncoder compared to gokit's default
 
 ## [v0.1.3]
 - httpmock.RoundTripper can now use a delegate in addition to an expected return
