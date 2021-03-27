@@ -164,7 +164,7 @@ func (suite *EncodeErrorSuite) TestSimple() {
 		suite.response,
 	)
 
-	result := suite.response.Result()
+	result := suite.response.Result() //nolint:bodyclose
 	suite.Equal(http.StatusInternalServerError, result.StatusCode)
 	suite.Equal(
 		http.Header{
@@ -196,7 +196,7 @@ func (suite *EncodeErrorSuite) TestCustom() {
 		suite.response,
 	)
 
-	result := suite.response.Result()
+	result := suite.response.Result() //nolint:bodyclose
 	suite.Equal(506, result.StatusCode)
 	suite.Equal(
 		http.Header{
