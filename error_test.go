@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -173,7 +173,7 @@ func (suite *EncodeErrorSuite) TestSimple() {
 		result.Header,
 	)
 
-	body, err := io.ReadAll(result.Body)
+	body, err := ioutil.ReadAll(result.Body)
 	suite.Require().NoError(err)
 
 	suite.JSONEq(
@@ -206,7 +206,7 @@ func (suite *EncodeErrorSuite) TestCustom() {
 		result.Header,
 	)
 
-	body, err := io.ReadAll(result.Body)
+	body, err := ioutil.ReadAll(result.Body)
 	suite.Require().NoError(err)
 
 	suite.JSONEq(
