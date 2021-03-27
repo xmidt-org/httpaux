@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.1.5]
+- force a new release just to get github actions to run
+
 ## [v0.1.4]
 - more consistent ErrorEncoder compared to gokit's default
 - downgrade io.ReadAll in tests for pre-1.16 go environments
@@ -39,7 +42,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Error type that exposes HTTP metadata for rendering a response
 - Sonar integration
 
-[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.1.4..HEAD
+[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.1.5..HEAD
+[v0.1.5]: https://github.com/xmidt-org/httpaux/compare/0.1.4...v0.1.5
 [v0.1.4]: https://github.com/xmidt-org/httpaux/compare/0.1.3...v0.1.4
 [v0.1.3]: https://github.com/xmidt-org/httpaux/compare/0.1.2...v0.1.3
 [v0.1.2]: https://github.com/xmidt-org/httpaux/compare/0.1.1...v0.1.2
