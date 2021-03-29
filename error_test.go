@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"text/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -211,6 +213,27 @@ func (suite *EncodeErrorSuite) TestCustom() {
 
 	suite.JSONEq(
 		`{"code": 506, "message": "here is an error", "cause": "expected"}`,
+		string(body),
+	)
+}
+
+func (suite *EncodeErrorSuite) TestRequiresEscape() {
+	const requiresEscaping = "this is an \"error\" that <requires> escaping"
+
+	EncodeError(
+		context.Background(),
+		errors.New(requiresEscaping),
+		suite.response,
+	)
+
+	result := suite.response.Result() //nolint:bodyclose
+	suite.Equal(http.StatusInternalServerError, result.StatusCode)
+
+	body, err := ioutil.ReadAll(result.Body)
+	suite.Require().NoError(err)
+
+	suite.JSONEq(
+		fmt.Sprintf(`{"code": 500, "cause": "%s"}`, template.JSEscapeString(requiresEscaping)),
 		string(body),
 	)
 }

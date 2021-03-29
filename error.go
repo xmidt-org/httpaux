@@ -143,10 +143,13 @@ func EncodeError(_ context.Context, err error, rw http.ResponseWriter) {
 	}
 
 	// fallback to a simple JSON message
-	fmt.Fprintf(
-		rw,
-		`{"code": %d, "cause": "%s"}`,
-		code,
-		err.Error(),
-	)
+	simple, _ := json.Marshal(struct {
+		Code  int    `json:"code"`
+		Cause string `json:"cause"`
+	}{
+		Code:  code,
+		Cause: err.Error(),
+	})
+
+	rw.Write(simple)
 }
