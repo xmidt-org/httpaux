@@ -18,9 +18,7 @@ type header struct {
 // so that when merging, it can be searched for existing header names.
 type headers []header
 
-func (h headers) Len() int           { return len(h) }
-func (h headers) Less(i, j int) bool { return h[i].name < h[j].name }
-func (h headers) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h headers) Len() int { return len(h) }
 
 // clone makes a distinct copy, ensuring that the clone has the given
 // minimum capacity.
@@ -234,26 +232,4 @@ func (h Header) AddTo(dst http.Header) {
 	for _, h := range h.h {
 		dst[h.name] = append(dst[h.name], h.values...)
 	}
-}
-
-// Then is a server middleware that adds all the headers to the http.ResponseWriter
-// prior to invoking the next handler.  As an optimization, if this Header is empty
-// no decoration is done.
-//
-// This method can be used with libraries like justinas/alice:
-//
-//   h := httpaux.NewHeader("Header", "Value")
-//   c := alice.New(
-//     h.Then,
-//   )
-func (h Header) Then(next http.Handler) http.Handler {
-	if h.Len() > 0 {
-		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			// have to set headers first, as the next handler will likely invoke WriteHeader or Write
-			h.SetTo(response.Header())
-			next.ServeHTTP(response, request)
-		})
-	}
-
-	return next
 }
