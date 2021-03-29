@@ -33,7 +33,7 @@ func TestHeader(t *testing.T) {
 		httpmock.Header("Header1", "value1"),
 	).Return(expected, nil).Once()
 
-	actual, actualErr := decorated.Do(request)
+	actual, actualErr := decorated.Do(request) //nolint:bodyclose
 	assert.True(expected == actual)
 	assert.NoError(actualErr)
 
