@@ -23,7 +23,10 @@ func (h headers) Less(i, j int) bool { return h[i].name < h[j].name }
 func (h headers) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
 // clone makes a distinct copy, ensuring that the clone has the given
-// minimim capacity
+// minimum capacity.
+//
+// IMPORTANT: this method MUST be called before adding a series of
+// name/value pairs in order to grow the headers large enough to handle them.
 func (h headers) clone(minCap int) headers {
 	newCap := len(h)
 	if newCap < minCap {
@@ -35,17 +38,16 @@ func (h headers) clone(minCap int) headers {
 	return clone
 }
 
-// sort resorts this header ascending according to name
-func (h headers) sort() {
-	sort.Sort(h)
-}
-
 // add handles adding a set of values for a name.  if the name exists,
 // the values are appended.  if the name was not found, it is inserted in
 // such a way as to preserve the order property.  the values slice is
 // copied into the header entry.
 //
 // add canonicalizes name prior to insertion.
+//
+// this method assumes clone has been called, so that the capacity
+// is large enough to hold the name/values entry.  this method panics
+// if that is not the case.
 func (h *headers) add(name string, values []string) {
 	if len(values) == 0 {
 		// optimization: don't bother if there are no values
@@ -59,21 +61,10 @@ func (h *headers) add(name string, values []string) {
 	})
 
 	if p == n || (*h)[p].name != name {
-		if cap(*h) < n+1 {
-			// we need to allocate
-			grow := make(headers, n+1)
-			copy(grow, (*h)[0:p])
-
-			if p < n {
-				copy(grow[p+1:], (*h)[p+1:])
-			}
-
-			*h = grow
-		} else {
-			// can grow in place
-			*h = (*h)[0 : n+1]
-			copy((*h)[p+1:], (*h)[p:])
-		}
+		// grow in place, which assumes clone had previously been called
+		// this will panic if not
+		*h = (*h)[0 : n+1]
+		copy((*h)[p+1:], (*h)[p:])
 
 		// since this is a new entry, need to null out the old values
 		(*h)[p].values = nil
@@ -146,7 +137,6 @@ func (h Header) AppendMap(more map[string]string) Header {
 		h: h.h.clone(h.Len() + len(more)),
 	}
 
-	n.h = append(n.h, h.h...)
 	for name, value := range more {
 		n.h.add(name, []string{value})
 	}
@@ -198,8 +188,10 @@ func (h Header) Extend(more Header) Header {
 		h: h.h.clone(h.Len() + more.Len()),
 	}
 
-	n.h = append(n.h, more.h...)
-	n.h.sort()
+	for _, he := range more.h {
+		n.h.add(he.name, he.values)
+	}
+
 	return n
 }
 
@@ -225,7 +217,7 @@ func NewHeaders(v ...string) Header {
 // SetTo replaces each name/value defined in this Header in the supplied http.Header.
 func (h Header) SetTo(dst http.Header) {
 	for _, h := range h.h {
-		dst[h.name] = h.values // TODO: safe copy?
+		dst[h.name] = append([]string{}, h.values...) // preserve immutability
 	}
 }
 
