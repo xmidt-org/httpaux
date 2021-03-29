@@ -63,7 +63,11 @@ func (h *headers) add(name string, values []string) {
 			// we need to allocate
 			grow := make(headers, n+1)
 			copy(grow, (*h)[0:p])
-			copy(grow[p+1:], (*h)[p+1:])
+
+			if p < n {
+				copy(grow[p+1:], (*h)[p+1:])
+			}
+
 			*h = grow
 		} else {
 			// can grow in place
@@ -71,7 +75,7 @@ func (h *headers) add(name string, values []string) {
 			copy((*h)[p+1:], (*h)[p:])
 		}
 
-		// since this is a new entry, we don't want to actually merge
+		// since this is a new entry, need to null out the old values
 		(*h)[p].values = nil
 	}
 
@@ -165,7 +169,7 @@ func (h Header) AppendHeaders(more ...string) Header {
 		h: h.h.clone(h.Len() + 1 + len(more)/2), // worst case
 	}
 
-	for i, j := 0, 1; i < len(more); i, j = i+1, j+1 {
+	for i, j := 0, 1; i < len(more); i, j = i+2, j+2 {
 		var value string
 		if j < len(more) {
 			value = more[j]
