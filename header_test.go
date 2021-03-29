@@ -8,8 +8,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"github.com/xmidt-org/httpaux/httpmock"
 )
+
+type HeaderTestSuite struct {
+	suite.Suite
+}
+
+func TestHeader(t *testing.T) {
+	suite.Run(t, new(HeaderTestSuite))
+}
 
 func testHeaderSetTo(t *testing.T, h Header, expected http.Header) {
 	var (
@@ -79,7 +88,7 @@ func testHeaderRoundTripDefault(t *testing.T) {
 	assert.Equal(http.DefaultTransport, hrt.next)
 }
 
-func TestHeader(t *testing.T) {
+func _TestHeader(t *testing.T) {
 	testData := []struct {
 		header   Header
 		expected http.Header

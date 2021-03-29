@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- allow appending and extending Header while mainting immutability
 
 ## [v0.1.5]
 - force a new release just to get github actions to run
