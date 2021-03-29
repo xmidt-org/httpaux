@@ -23,17 +23,6 @@ func (suite *HeaderTestSuite) assertHeader(expected http.Header, actual Header) 
 	return suite.Equal(expected, actualHeader)
 }
 
-func (suite *HeaderTestSuite) requireHeader(expected http.Header, actual Header) {
-	actualHeader := make(http.Header)
-	actual.SetTo(actualHeader)
-
-	if expected == nil {
-		suite.Require().Empty(actualHeader)
-	} else {
-		suite.Require().Equal(expected, actualHeader)
-	}
-}
-
 func (suite *HeaderTestSuite) TestEmptyHeader() {
 	h := EmptyHeader()
 	suite.Zero(h.Len())
@@ -70,7 +59,7 @@ func (suite *HeaderTestSuite) TestAppend() {
 		},
 		{
 			initial: http.Header{
-				"Initial1":    {"value1"},
+				"initial1":    {"value1"}, // this should be canonicalized
 				"Appended":    {"value1"},
 				"EmptyValues": {}, // this shouldn't appear
 			},
@@ -130,7 +119,7 @@ func (suite *HeaderTestSuite) TestAppendMap() {
 		{
 			initial: map[string]string{},
 			toAppend: map[string]string{
-				"Header1": "value1",
+				"header1": "value1", // this should be canonicalized
 			},
 			expected: http.Header{
 				"Header1": {"value1"},
@@ -138,7 +127,7 @@ func (suite *HeaderTestSuite) TestAppendMap() {
 		},
 		{
 			initial: map[string]string{
-				"Initial1": "value1",
+				"initial1": "value1", // this should be canonicalized
 				"Appended": "value1",
 			},
 			toAppend: map[string]string{
@@ -170,9 +159,13 @@ func (suite *HeaderTestSuite) TestNewHeaderFromMap() {
 	}{
 		{}, // everything empty
 		{
-			headers: map[string]string{"Header1": "value1"},
+			headers: map[string]string{
+				"Header1":                      "value1",
+				"this-should-be-canonicalized": "value1",
+			},
 			expected: http.Header{
-				"Header1": {"value1"},
+				"Header1":                      {"value1"},
+				"This-Should-Be-Canonicalized": {"value1"},
 			},
 		},
 		{
@@ -193,6 +186,182 @@ func (suite *HeaderTestSuite) TestNewHeaderFromMap() {
 		suite.Run(strconv.Itoa(i), func() {
 			h := NewHeaderFromMap(testCase.headers)
 			suite.assertHeader(testCase.expected, h)
+		})
+	}
+}
+
+func (suite *HeaderTestSuite) TestAppendHeaders() {
+	testCases := []struct {
+		initial  []string
+		toAppend []string
+		expected http.Header
+	}{
+		{}, // everything empty
+		{
+			initial:  []string{"header1", "value1", "HeaDer2", "value1"},
+			toAppend: []string{"HEADER2", "value2", "blank"},
+			expected: http.Header{
+				"Header1": {"value1"},
+				"Header2": {"value1", "value2"},
+				"Blank":   {""},
+			},
+		},
+		{
+			initial:  []string{"Header1", "value1", "blank"},
+			toAppend: []string{"BLANK", "value1"},
+			expected: http.Header{
+				"Header1": {"value1"},
+				"Blank":   {"", "value1"},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		suite.Run(strconv.Itoa(i), func() {
+			h := NewHeaders(testCase.initial...)
+			h = h.AppendHeaders(testCase.toAppend...)
+			suite.assertHeader(testCase.expected, h)
+		})
+	}
+}
+
+func (suite *HeaderTestSuite) TestNewHeaders() {
+	testCases := []struct {
+		values   []string
+		expected http.Header
+	}{
+		{}, // everything empty
+		{
+			values: []string{"Header1", "value1", "this-should-be-canonicalized", "value1"},
+			expected: http.Header{
+				"Header1":                      {"value1"},
+				"This-Should-Be-Canonicalized": {"value1"},
+			},
+		},
+		{
+			values: []string{"Multivalue", "value1", "Header1", "value1", "Multivalue", "value2", "Blank"},
+			expected: http.Header{
+				"Header1":    {"value1"},
+				"Multivalue": {"value1", "value2"},
+				"Blank":      {""},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		suite.Run(strconv.Itoa(i), func() {
+			h := NewHeaders(testCase.values...)
+			suite.assertHeader(testCase.expected, h)
+		})
+	}
+}
+
+func (suite *HeaderTestSuite) TestExtend() {
+	testCases := []struct {
+		initial  Header
+		toExtend Header
+		expected http.Header
+	}{
+		{}, // everything empty
+		{
+			initial:  Header{},
+			toExtend: NewHeaders("header1", "value1"), // this should be canonicalized
+			expected: http.Header{
+				"Header1": {"value1"},
+			},
+		},
+		{
+			initial:  NewHeaders("Initial1", "value1", "Multivalue", "value1", "blank"),
+			toExtend: NewHeaders("Multivalue", "value2", "Header1", "value1", "blank", "value1"),
+			expected: http.Header{
+				"Initial1":   {"value1"},
+				"Header1":    {"value1"},
+				"Multivalue": {"value1", "value2"},
+				"Blank":      {"", "value1"},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		suite.Run(strconv.Itoa(i), func() {
+			h := testCase.initial.Extend(testCase.toExtend)
+			suite.assertHeader(testCase.expected, h)
+		})
+	}
+}
+
+func (suite *HeaderTestSuite) TestSetTo() {
+	testCases := []struct {
+		header   Header
+		expected http.Header
+	}{
+		{
+			header:   Header{},
+			expected: http.Header{},
+		},
+		{
+			header: NewHeaders("Header1", "value1", "HeadEr2", "value2"),
+			expected: http.Header{
+				"Header1": {"value1"},
+				"Header2": {"value2"},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		suite.Run(strconv.Itoa(i), func() {
+			actual := make(http.Header)
+			testCase.header.SetTo(actual)
+			suite.Equal(testCase.expected, actual)
+		})
+	}
+}
+
+func (suite *HeaderTestSuite) TestAddTo() {
+	testCases := []struct {
+		header   Header
+		addTo    http.Header
+		expected http.Header
+	}{
+		{
+			header:   Header{},
+			addTo:    http.Header{},
+			expected: http.Header{},
+		},
+		{
+			header: Header{},
+			addTo: http.Header{
+				"Header1": {"value1"},
+			},
+			expected: http.Header{
+				"Header1": {"value1"},
+			},
+		},
+		{
+			header: NewHeaders("Header1", "value1", "header2", "value1"), // this should be canonicalized
+			addTo:  http.Header{},
+			expected: http.Header{
+				"Header1": {"value1"},
+				"Header2": {"value1"},
+			},
+		},
+		{
+			header: NewHeaders("Multivalue", "value2", "Initial1", "value1", "blank"),
+			addTo: http.Header{
+				"Multivalue": {"value1"},
+			},
+			expected: http.Header{
+				"Multivalue": {"value1", "value2"},
+				"Blank":      {""},
+				"Initial1":   {"value1"},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		suite.Run(strconv.Itoa(i), func() {
+			testCase.header.AddTo(testCase.addTo)
+			suite.Equal(testCase.expected, testCase.addTo)
 		})
 	}
 }

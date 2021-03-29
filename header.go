@@ -147,7 +147,7 @@ func (h Header) AppendMap(more map[string]string) Header {
 // AppendHeaders return a new Header with the variadic slice of name/value
 // pairs appended.  If more has an odd length, the last value is assumed to
 // be a name with a blank value.  If more is empty, the original Header
-// is returned.
+// is returned.  Duplicate names are allowed, which result in multi-valued headers.
 //
 // This method does not modify the original Header.
 func (h Header) AppendHeaders(more ...string) Header {
@@ -196,20 +196,27 @@ func (h Header) Extend(more Header) Header {
 }
 
 // NewHeader creates an immutable, preprocessed Header given an http.Header.
+//
+// If v is empty, the canonical EmptyHeader is returned.
 func NewHeader(v http.Header) Header {
 	return emptyHeader.Append(v)
 }
 
-// NewHeaderFromMap allows a Header to be built directly from a map[string]string
-// rather than an http.Header.
+// NewHeaderFromMap creates an immutable, preprocessed Header given a simple
+// map of string-to-string.
+//
+// If v is empty, the canonical EmptyHeader is returned.
 func NewHeaderFromMap(v map[string]string) Header {
 	return emptyHeader.AppendMap(v)
 }
 
-// NewHeaders takes a variadic list of values and interprets them as alternating
-// name/value pairs, with each pair specifying an HTTP header.  Duplicate header names
-// are supported, which results in multivalued headers.  If v contains an odd number
-// of strings, the last string is interpreted as a header with a blank value.
+// NewHeaders creates an immutable, preprocessed Header given a variadic list
+// of names and values in {name1, value1, name2, value2, ...} order.  Duplicate
+// names are allowed, which will result in multi-valued headers.  If v contains
+// an odd number of values, the last value is interpreted as a header name with
+// a single blank value.
+//
+// If v is empty, the canonical EmptyHeader is returned.
 func NewHeaders(v ...string) Header {
 	return emptyHeader.AppendHeaders(v...)
 }
