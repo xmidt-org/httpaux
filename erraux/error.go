@@ -1,7 +1,6 @@
-package httpaux
+package erraux
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,16 +21,23 @@ type Error struct {
 	// that occurred below the presentation layer.
 	Err error
 
-	// Message is the optional message to associate with this error
+	// Message is the optional message to associate with this error.
 	Message string
 
 	// Code is the response code to use for this error.  If unset, http.StatusInternalServerError
 	// is used instead.
 	Code int
 
-	// Header is the optional set of HTTP headers to associate with this error
+	// Header is the optional set of HTTP headers to associate with this error.
 	Header http.Header
+
+	// Fields is the optional set of extra fields associated with this error.
+	Fields Fields
 }
+
+var _ StatusCoder = (*Error)(nil)
+var _ Headerer = (*Error)(nil)
+var _ ErrorFielder = (*Error)(nil)
 
 // Unwrap produces the cause of this error
 func (e *Error) Unwrap() error {
@@ -63,17 +69,25 @@ func (e *Error) Headers() http.Header {
 	return e.Header
 }
 
-// MarshalJSON produces a JSON representation of this error.  The Err field
-// is marshaled as "cause".  If the Message field is set, it is marshaled as "message".
-func (e *Error) MarshalJSON() ([]byte, error) {
-	var o bytes.Buffer
-	if len(e.Message) > 0 {
-		fmt.Fprintf(&o, `{"code": %d, "message": "%s", "cause": "%s"}`, e.StatusCode(), e.Message, e.Err.Error())
-	} else {
-		fmt.Fprintf(&o, `{"code": %d, "cause": "%s"}`, e.StatusCode(), e.Err.Error())
-	}
+// ErrorFields fulfills the ErrorFielder interface and allows this error to
+// supply additional fields that describe the error.
+func (e *Error) ErrorFields(f Fields) {
+	f.Merge(e.Fields)
 
-	return o.Bytes(), nil
+	// override the cause, as our Error() method merges Message and Err
+	f.SetCause(e.Err.Error())
+
+	if len(e.Message) > 0 {
+		f["message"] = e.Message
+	}
+}
+
+// MarshalJSON allows this Error to be marshaled directly as JSON.
+// When used with a Matrix, this method is not used.
+func (e *Error) MarshalJSON() ([]byte, error) {
+	f := NewFields(e.Code, e.Err.Error())
+	e.ErrorFields(f)
+	return json.Marshal(f)
 }
 
 // IsTemporary tests if the given error is marked as a temporary error.
