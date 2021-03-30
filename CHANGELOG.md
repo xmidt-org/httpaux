@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [v0.1.6]
 - allow appending and extending Header while mainting immutability
 - consistently defined middleware in subpackages
 - ensure all error JSON representations are properly escaped
@@ -46,7 +48,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Error type that exposes HTTP metadata for rendering a response
 - Sonar integration
 
-[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.1.5..HEAD
+[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.1.6..HEAD
+[v0.1.6]: https://github.com/xmidt-org/httpaux/compare/v0.1.5...v0.1.6
 [v0.1.5]: https://github.com/xmidt-org/httpaux/compare/v0.1.4...v0.1.5
 [v0.1.4]: https://github.com/xmidt-org/httpaux/compare/v0.1.3...v0.1.4
 [v0.1.3]: https://github.com/xmidt-org/httpaux/compare/v0.1.2...v0.1.3
