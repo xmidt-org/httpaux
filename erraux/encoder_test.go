@@ -121,7 +121,7 @@ func (suite *EncoderTestSuite) TestIs() {
 		)
 	})
 
-	suite.Run("Override", func() {
+	suite.Run("CustomRule", func() {
 		simpleErr := errors.New("simple error")
 		m := Encoder{}.Add(
 			Is(simpleErr).
@@ -173,6 +173,17 @@ func (suite *EncoderTestSuite) TestIs() {
 	})
 }
 
+// TestInterface is used in the As tests
+type TestInterface interface {
+	DoIt()
+}
+
+// testError implements TestInterface
+type testError struct{}
+
+func (te *testError) Error() string { return "test error" }
+func (te *testError) DoIt()         {}
+
 func (suite *EncoderTestSuite) TestAs() {
 	suite.Run("NilTarget", func() {
 		suite.Panics(func() {
@@ -219,6 +230,117 @@ func (suite *EncoderTestSuite) TestAs() {
 
 		suite.JSONEq(
 			`{"code": 567, "cause": "nested", "message": "a message", "custom": ["a", "b"]}`,
+			body,
+		)
+	})
+
+	suite.Run("CustomRule", func() {
+		customErr := &Error{
+			Err:     errors.New("nested"),
+			Message: "a message",
+			Code:    567,
+			Header: http.Header{
+				"Custom": {"value1", "value2"},
+			},
+			Fields: Fields{"custom": []string{"a", "b"}},
+		}
+
+		m := Encoder{}.Add(
+			As((*Error)(nil)).
+				StatusCode(598).
+				Headers("Additional", "true").
+				Fields("additional", 45.9),
+		)
+
+		response := httptest.NewRecorder()
+		m.Encode(
+			context.Background(),
+			customErr,
+			response,
+		)
+
+		statusCode, h, body := suite.result(response)
+		suite.Equal(598, statusCode)
+		suite.assertHeader(
+			http.Header{
+				"Custom":     {"value1", "value2"},
+				"Additional": {"true"},
+			},
+			h,
+		)
+
+		suite.JSONEq(
+			`{"code": 598, "cause": "nested", "message": "a message", "custom": ["a", "b"], "additional": 45.9}`,
+			body,
+		)
+	})
+
+	suite.Run("Interface", func() {
+		m := Encoder{}.Add(
+			As((*TestInterface)(nil)),
+		)
+
+		response := httptest.NewRecorder()
+		m.Encode(
+			context.Background(),
+			&testError{},
+			response,
+		)
+
+		statusCode, _, body := suite.result(response)
+		suite.Equal(500, statusCode)
+		suite.JSONEq(
+			`{"code": 500, "cause": "test error"}`,
+			body,
+		)
+	})
+
+	suite.Run("InterfaceWithCustomRule", func() {
+		m := Encoder{}.Add(
+			As((*TestInterface)(nil)).
+				StatusCode(512).
+				Headers("Custom", "true").
+				Fields("custom", 123),
+		)
+
+		response := httptest.NewRecorder()
+		m.Encode(
+			context.Background(),
+			&testError{},
+			response,
+		)
+
+		statusCode, h, body := suite.result(response)
+		suite.Equal(512, statusCode)
+		suite.assertHeader(
+			http.Header{
+				"Custom": {"true"},
+			},
+			h,
+		)
+
+		suite.JSONEq(
+			`{"code": 512, "cause": "test error", "custom": 123}`,
+			body,
+		)
+	})
+
+	suite.Run("Fallthrough", func() {
+		m := Encoder{}.Add(
+			As((*TestInterface)(nil)),
+		)
+
+		response := httptest.NewRecorder()
+		m.Encode(
+			context.Background(),
+			errors.New("this error is not defined"),
+			response,
+		)
+
+		statusCode, _, body := suite.result(response)
+		suite.Equal(500, statusCode)
+		suite.JSONEq(
+			`{"code": 500, "cause": "this error is not defined"}`,
 			body,
 		)
 	})

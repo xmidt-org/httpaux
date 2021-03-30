@@ -154,6 +154,10 @@ func (ae *asEncoder) newErrorEncoder() errorEncoder {
 			}
 		}
 
+		if statusCode <= 0 {
+			statusCode = http.StatusInternalServerError
+		}
+
 		rw.WriteHeader(statusCode)
 		fields := NewFields(statusCode, target.Error())
 		for k, v := range ae.fields {
@@ -218,11 +222,13 @@ func As(target interface{}) EncoderRule {
 	case t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Interface:
 		return &asEncoder{
 			target: t.Elem(), // the interface type: errors.As((*MyInterface)(nil))
+			fields: Fields{},
 		}
 
 	case t.Implements(errorType):
 		return &asEncoder{
 			target: t, // the exact type passed in: errors.As((*net.DNSError)(nil))
+			fields: Fields{},
 		}
 
 	default:
@@ -264,7 +270,7 @@ func (e Encoder) Add(rules ...EncoderRule) Encoder {
 //   {"code": 500, "cause": "parsing error"}
 //
 // Beyond that, errors may implement StatusCoder, Headerer, and ErrorFielder
-// to tailor the HTTP representation.  Any values set on the rules will override any
+// to tailor the HTTP representation.  Any status code set on the rules will override any
 // value the error supplies.  For example:
 //
 //   type MyError struct{}
@@ -275,6 +281,9 @@ func (e Encoder) Add(rules ...EncoderRule) Encoder {
 //   e := Encoder{}.Add(
 //       As((*MyError)(nil)).StatusCode(500),
 //   )
+//
+// By contrast, an headers or fields set on the rule will be appended to whatever the
+// error defines at runtime.
 //
 // This method may be used with go-kit's transport/http package as an ErrorEncoder.
 func (e Encoder) Encode(ctx context.Context, err error, rw http.ResponseWriter) {
