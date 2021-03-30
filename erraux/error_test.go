@@ -4,17 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"testing"
-	"text/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 func testErrorSimple(t *testing.T) {
@@ -145,99 +140,4 @@ func TestIsTemporary(t *testing.T) {
 	assert.True(
 		IsTemporary(context.DeadlineExceeded),
 	)
-}
-
-type EncodeErrorSuite struct {
-	suite.Suite
-
-	response *httptest.ResponseRecorder
-}
-
-var _ suite.SetupTestSuite = (*EncodeErrorSuite)(nil)
-
-func (suite *EncodeErrorSuite) SetupTest() {
-	suite.response = httptest.NewRecorder()
-}
-
-func (suite *EncodeErrorSuite) TestSimple() {
-	EncodeError(
-		context.Background(),
-		errors.New("expected"),
-		suite.response,
-	)
-
-	result := suite.response.Result() //nolint:bodyclose
-	suite.Equal(http.StatusInternalServerError, result.StatusCode)
-	suite.Equal(
-		http.Header{
-			"Content-Type": {"application/json"},
-		},
-		result.Header,
-	)
-
-	body, err := ioutil.ReadAll(result.Body)
-	suite.Require().NoError(err)
-
-	suite.JSONEq(
-		`{"code": 500, "cause": "expected"}`,
-		string(body),
-	)
-}
-
-func (suite *EncodeErrorSuite) TestCustom() {
-	EncodeError(
-		context.Background(),
-		&Error{
-			Code:    506,
-			Err:     errors.New("expected"),
-			Message: "here is an error",
-			Header: http.Header{
-				"Custom": {"true"},
-			},
-		},
-		suite.response,
-	)
-
-	result := suite.response.Result() //nolint:bodyclose
-	suite.Equal(506, result.StatusCode)
-	suite.Equal(
-		http.Header{
-			"Content-Type": {"application/json"},
-			"Custom":       {"true"},
-		},
-		result.Header,
-	)
-
-	body, err := ioutil.ReadAll(result.Body)
-	suite.Require().NoError(err)
-
-	suite.JSONEq(
-		`{"code": 506, "message": "here is an error", "cause": "expected"}`,
-		string(body),
-	)
-}
-
-func (suite *EncodeErrorSuite) TestRequiresEscape() {
-	const requiresEscaping = "this is an \"error\" that <requires> escaping"
-
-	EncodeError(
-		context.Background(),
-		errors.New(requiresEscaping),
-		suite.response,
-	)
-
-	result := suite.response.Result() //nolint:bodyclose
-	suite.Equal(http.StatusInternalServerError, result.StatusCode)
-
-	body, err := ioutil.ReadAll(result.Body)
-	suite.Require().NoError(err)
-
-	suite.JSONEq(
-		fmt.Sprintf(`{"code": 500, "cause": "%s"}`, template.JSEscapeString(requiresEscaping)),
-		string(body),
-	)
-}
-
-func TestErrorEncoder(t *testing.T) {
-	suite.Run(t, new(EncodeErrorSuite))
 }

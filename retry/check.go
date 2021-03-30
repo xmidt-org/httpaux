@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/xmidt-org/httpaux"
+	"github.com/xmidt-org/httpaux/erraux"
 )
 
 // Check is a predicate type used to determine if a result from http.Client.Do
@@ -62,5 +62,5 @@ func DefaultCheck(r *http.Response, err error) bool {
 		return false
 	}
 
-	return httpaux.IsTemporary(err)
+	return erraux.IsTemporary(err)
 }

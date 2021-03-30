@@ -1,7 +1,6 @@
 package erraux
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,62 +107,4 @@ func IsTemporary(err error) bool {
 	}
 
 	return false
-}
-
-// EncodeError is a gokit-style error coder for server code that consistently
-// writes JSON for all errors.  The builtin gokit error encoder will write text/plain
-// for anything it doesn't recognize, giving rise to inconsistent messages when
-// some errors implement json.Marshaler and others do not.
-//
-// This function also honors embedded errors via the errors package.  If any error
-// in the chain provides the specialized methods such as StatusCode, that error is used
-// for that portion of the HTTP response.
-func EncodeError(_ context.Context, err error, rw http.ResponseWriter) {
-	type headerer interface {
-		Headers() http.Header
-	}
-
-	var h headerer
-	if errors.As(err, &h) {
-		headers := h.Headers()
-		for name := range headers {
-			name = http.CanonicalHeaderKey(name)
-			rw.Header()[name] = append(rw.Header()[name], headers[name]...)
-		}
-	}
-
-	// always write JSON
-	rw.Header().Set("Content-Type", "application/json")
-
-	type statusCoder interface {
-		StatusCode() int
-	}
-
-	code := http.StatusInternalServerError
-	var sc statusCoder
-	if errors.As(err, &sc) {
-		code = sc.StatusCode()
-	}
-
-	rw.WriteHeader(code)
-
-	var m json.Marshaler
-	if errors.As(err, &m) {
-		body, marshalErr := m.MarshalJSON()
-		if marshalErr == nil {
-			rw.Write(body)
-			return
-		}
-	}
-
-	// fallback to a simple JSON message
-	simple, _ := json.Marshal(struct {
-		Code  int    `json:"code"`
-		Cause string `json:"cause"`
-	}{
-		Code:  code,
-		Cause: err.Error(),
-	})
-
-	rw.Write(simple)
 }

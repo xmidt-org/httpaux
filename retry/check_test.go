@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/xmidt-org/httpaux"
+	"github.com/xmidt-org/httpaux/erraux"
 )
 
 type CheckTestSuite struct {
@@ -70,7 +70,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: nil,
-			err:      &httpaux.Error{Err: errors.New("this wrapped error shouldn't be retried")},
+			err:      &erraux.Error{Err: errors.New("this wrapped error shouldn't be retried")},
 			expected: false,
 		},
 		{
@@ -80,7 +80,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: nil,
-			err:      &httpaux.Error{Err: context.Canceled},
+			err:      &erraux.Error{Err: context.Canceled},
 			expected: false,
 		},
 		{
@@ -90,7 +90,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: nil,
-			err:      &httpaux.Error{Err: context.DeadlineExceeded},
+			err:      &erraux.Error{Err: context.DeadlineExceeded},
 			expected: false,
 		},
 		{
@@ -100,7 +100,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: nil,
-			err:      &httpaux.Error{Err: &net.DNSError{IsTemporary: true}},
+			err:      &erraux.Error{Err: &net.DNSError{IsTemporary: true}},
 			expected: true,
 		},
 		{
@@ -110,7 +110,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: nil,
-			err:      &httpaux.Error{Err: &net.DNSError{IsTemporary: false}},
+			err:      &erraux.Error{Err: &net.DNSError{IsTemporary: false}},
 			expected: false,
 		},
 	}
