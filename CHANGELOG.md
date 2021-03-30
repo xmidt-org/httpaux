@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - allow appending and extending Header while mainting immutability
 - consistently defined middleware in subpackages
 - ensure all error JSON representations are properly escaped
+- configurable Encoder ruleset for HTTP error representations
 
 ## [v0.1.5]
 - force a new release just to get github actions to run
