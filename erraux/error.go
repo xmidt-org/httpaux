@@ -11,8 +11,9 @@ import (
 // HTTP response information.  This type implements several interfaces
 // in popular packages like go-kit.
 //
-// The primary use case for this type is wrapping errors so they can be
-// easily rendered as HTTP responses.
+// This type is provided for code that is HTTP-aware, e.g. the presentation tier.
+// For more general code, prefer defining an Encoder with custom rules to define
+// the HTTP representation of errors.
 type Error struct {
 	// Err is the cause of this error.  This field is required.
 	//
@@ -82,7 +83,8 @@ func (e *Error) ErrorFields(f Fields) {
 }
 
 // MarshalJSON allows this Error to be marshaled directly as JSON.
-// When used with a Matrix, this method is not used.
+// The JSON representation is consistent with Encoder.  However, when
+// used with an Encoder, this method is not used.
 func (e *Error) MarshalJSON() ([]byte, error) {
 	f := NewFields(e.Code, e.Err.Error())
 	e.ErrorFields(f)

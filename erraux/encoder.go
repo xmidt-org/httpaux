@@ -90,7 +90,7 @@ func (ie *isEncoder) Fields(namesAndValues ...interface{}) EncoderRule {
 //
 // The supplied target is assumed to be immutable.  The status code, headers, and any
 // extra fields are computed once and are an immutable part of the rule once it is
-// added to a Matrix.
+// added to an Encoder.
 //
 // See: https://pkg.go.dev/errors#Is
 func Is(target error) EncoderRule {
@@ -237,7 +237,7 @@ func As(target interface{}) EncoderRule {
 }
 
 // Encoder defines a ruleset for writing golang errors to HTTP representations.
-// The zero value is a valid matrix that will simply encode all errors with a default
+// The zero value is a valid encoder that will simply encode all errors with a default
 // JSON representation.
 //
 // This type does not honor json.Marshaler.  Each error being allowed to marshal itself
@@ -258,7 +258,7 @@ func (e Encoder) Add(rules ...EncoderRule) Encoder {
 	return e
 }
 
-// Encode is a gokit-style error encoder.  Each rule in this matrix is tried in the order
+// Encode is a gokit-style error encoder.  Each rule in this encoder is tried in the order
 // they were added via Add.  If no rule can handle the error, a default JSON representation
 // is used.
 //
@@ -278,8 +278,8 @@ func (e Encoder) Add(rules ...EncoderRule) Encoder {
 //   func (e *MyError) Error() string { "my error" }
 //
 //   // this will override MyError.StatusCode
-//   e := Encoder{}.Add(
-//       As((*MyError)(nil)).StatusCode(500),
+//   e := erraux.Encoder{}.Add(
+//       erraux.As((*MyError)(nil)).StatusCode(500),
 //   )
 //
 // By contrast, an headers or fields set on the rule will be appended to whatever the
