@@ -36,6 +36,7 @@ type Error struct {
 }
 
 var _ StatusCoder = (*Error)(nil)
+var _ Causer = (*Error)(nil)
 var _ Headerer = (*Error)(nil)
 var _ ErrorFielder = (*Error)(nil)
 
@@ -64,6 +65,12 @@ func (e *Error) StatusCode() int {
 	return e.Code
 }
 
+// Cause returns just the error's Error() result.  The usage of this
+// method is intended to be JSON or other non-plaintext representations.
+func (e *Error) Cause() string {
+	return e.Err.Error()
+}
+
 // Headers returns the optional headers to associate with this error's response
 func (e *Error) Headers() http.Header {
 	return e.Header
@@ -73,10 +80,6 @@ func (e *Error) Headers() http.Header {
 // supply additional fields that describe the error.
 func (e *Error) ErrorFields(f Fields) {
 	f.Merge(e.Fields)
-
-	// override the cause, as our Error() method merges Message and Err
-	f.SetCause(e.Err.Error())
-
 	if len(e.Message) > 0 {
 		f["message"] = e.Message
 	}
@@ -86,7 +89,7 @@ func (e *Error) ErrorFields(f Fields) {
 // The JSON representation is consistent with Encoder.  However, when
 // used with an Encoder, this method is not used.
 func (e *Error) MarshalJSON() ([]byte, error) {
-	f := NewFields(e.Code, e.Err.Error())
+	f := NewFields(e.Code, e.Cause())
 	e.ErrorFields(f)
 	return json.Marshal(f)
 }

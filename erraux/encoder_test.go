@@ -126,6 +126,7 @@ func (suite *EncoderTestSuite) TestIs() {
 		m := Encoder{}.Add(
 			Is(simpleErr).
 				StatusCode(599).
+				Cause("a custom cause").
 				Headers("Error", "true").
 				Fields("field1", "value1"),
 		)
@@ -145,7 +146,7 @@ func (suite *EncoderTestSuite) TestIs() {
 		)
 
 		suite.JSONEq(
-			`{"code": 599, "cause": "simple error", "field1": "value1"}`,
+			`{"code": 599, "cause": "a custom cause", "field1": "value1"}`,
 			body,
 		)
 	})
@@ -248,6 +249,7 @@ func (suite *EncoderTestSuite) TestAs() {
 		m := Encoder{}.Add(
 			As((*Error)(nil)).
 				StatusCode(598).
+				Cause("a custom cause").
 				Headers("Additional", "true").
 				Fields("additional", 45.9),
 		)
@@ -270,7 +272,7 @@ func (suite *EncoderTestSuite) TestAs() {
 		)
 
 		suite.JSONEq(
-			`{"code": 598, "cause": "nested", "message": "a message", "custom": ["a", "b"], "additional": 45.9}`,
+			`{"code": 598, "cause": "a custom cause", "message": "a message", "custom": ["a", "b"], "additional": 45.9}`,
 			body,
 		)
 	})

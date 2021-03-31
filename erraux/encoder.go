@@ -20,6 +20,14 @@ type Headerer interface {
 	Headers() http.Header
 }
 
+// Causer can be implemented by errors to produce a cause, which corresponds
+// to the JSON field of the same name.  An error may choose to do this because
+// the Error() method might be targeted at logs or other plain text output, while
+// Cause() is specifically for a JSON representation.
+type Causer interface {
+	Cause() string
+}
+
 type errorEncoder func(context.Context, error, http.ResponseWriter) bool
 
 // EncoderRule describes how to encode an error.  Rules are created with either Is or As.
@@ -29,6 +37,12 @@ type EncoderRule interface {
 	//
 	// This method returns this rule for method chaining.
 	StatusCode(int) EncoderRule
+
+	// Cause sets the cause field for this error.  This will override any Cause() method
+	// supplied on the error.
+	//
+	// This method returns this rule for method chaining.
+	Cause(string) EncoderRule
 
 	// Headers adds header names and values according to the rules of httpaux.Header.AppendHeaders.
 	// These will be added to any headers the error may define by implementing Headerer.
@@ -75,6 +89,11 @@ func (ie *isEncoder) StatusCode(c int) EncoderRule {
 	return ie
 }
 
+func (ie *isEncoder) Cause(v string) EncoderRule {
+	ie.fields.SetCause(v)
+	return ie
+}
+
 func (ie *isEncoder) Headers(v ...string) EncoderRule {
 	ie.header = ie.header.AppendHeaders(v...)
 	return ie
@@ -95,13 +114,15 @@ func (ie *isEncoder) Fields(namesAndValues ...interface{}) EncoderRule {
 // See: https://pkg.go.dev/errors#Is
 func Is(target error) EncoderRule {
 	ie := &isEncoder{
-		target:     target,
-		statusCode: http.StatusInternalServerError,
+		target: target,
+		fields: make(Fields, 2), // at least enough for code and cause
 	}
 
 	var sc StatusCoder
 	if errors.As(target, &sc) {
-		ie.statusCode = sc.StatusCode()
+		ie.StatusCode(sc.StatusCode())
+	} else {
+		ie.StatusCode(http.StatusInternalServerError)
 	}
 
 	var h Headerer
@@ -109,7 +130,13 @@ func Is(target error) EncoderRule {
 		ie.header = httpaux.NewHeader(h.Headers())
 	}
 
-	ie.fields = NewFields(ie.statusCode, target.Error())
+	var c Causer
+	if errors.As(target, &c) {
+		ie.Cause(c.Cause())
+	} else {
+		ie.Cause(target.Error())
+	}
+
 	var ef ErrorFielder
 	if errors.As(target, &ef) {
 		ef.ErrorFields(ie.fields)
@@ -158,11 +185,18 @@ func (ae *asEncoder) newErrorEncoder() errorEncoder {
 			statusCode = http.StatusInternalServerError
 		}
 
-		rw.WriteHeader(statusCode)
-		fields := NewFields(statusCode, target.Error())
-		for k, v := range ae.fields {
-			fields[k] = v
+		fields := ae.fields.Clone()
+		fields.SetCode(statusCode)
+		if !fields.HasCause() {
+			var c Causer
+			if errors.As(target, &c) {
+				fields.SetCause(c.Cause())
+			} else {
+				fields.SetCause(target.Error())
+			}
 		}
+
+		rw.WriteHeader(statusCode)
 
 		var ef ErrorFielder
 		if errors.As(target, &ef) {
@@ -181,6 +215,11 @@ func (ae *asEncoder) StatusCode(c int) EncoderRule {
 	// NOTE: don't need to update the fields here, as the status code
 	// will be dynamically determined.
 
+	return ae
+}
+
+func (ae *asEncoder) Cause(v string) EncoderRule {
+	ae.fields.SetCause(v)
 	return ae
 }
 
@@ -217,22 +256,23 @@ func As(target interface{}) EncoderRule {
 		panic("erraux: target cannot be nil")
 	}
 
+	var targetType reflect.Type
 	t := reflect.TypeOf(target)
 	switch {
 	case t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Interface:
-		return &asEncoder{
-			target: t.Elem(), // the interface type: errors.As((*MyInterface)(nil))
-			fields: Fields{},
-		}
+		targetType = t.Elem() // the interface type: errors.As((*MyInterface)(nil))
 
 	case t.Implements(errorType):
-		return &asEncoder{
-			target: t, // the exact type passed in: errors.As((*net.DNSError)(nil))
-			fields: Fields{},
-		}
+		targetType = t // the exact type passed in: errors.As((*net.DNSError)(nil))
 
 	default:
+		// consistent with errors.As
 		panic("erraux: target must either (1) be an interface pointer or (2) implement error")
+	}
+
+	return &asEncoder{
+		target: targetType,
+		fields: make(Fields, 2),
 	}
 }
 
