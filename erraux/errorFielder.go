@@ -36,9 +36,25 @@ func (f Fields) SetCode(code int) {
 	f[codeFieldName] = code
 }
 
+// HasCause tests if this Fields has a cause.
+func (f Fields) HasCause() bool {
+	_, ok := f[causeFieldName]
+	return ok
+}
+
 // SetCause updates the cause field.
 func (f Fields) SetCause(cause string) {
 	f[causeFieldName] = cause
+}
+
+// Clone returns a distinct, shallow copy of this Fields instance.
+func (f Fields) Clone() Fields {
+	c := make(Fields, len(f))
+	for k, v := range f {
+		c[k] = v
+	}
+
+	return c
 }
 
 // Merge merges the fields from the given Fields into this instance.
