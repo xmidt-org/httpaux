@@ -12,12 +12,44 @@ import (
 
 // StatusCoder can be implemented by errors to produce a custom status code.
 type StatusCoder interface {
+	// StatusCode returns the HTTP response code for an error.  Typically, this
+	// will be a 4xx or 5xx code.  However, this package allows any valid HTTP
+	// code to be used.
 	StatusCode() int
+}
+
+// statusCodeFor is a helper that determines the status code for an error.
+// If err or anything in its chain implements StatusCoder, that value is used.
+// Otherwise, this function returns http.StatusInternalServerError.
+func statusCodeFor(err error) (statusCode int) {
+	var sc StatusCoder
+	if errors.As(err, &sc) {
+		statusCode = sc.StatusCode()
+	}
+
+	if statusCode < 100 {
+		// this case includes if a StatusCoder returned a bad value
+		statusCode = http.StatusInternalServerError
+	}
+
+	return
 }
 
 // Headerer can be implemented by errors to produce custom headers.
 type Headerer interface {
 	Headers() http.Header
+}
+
+// headersFor is a helper that determines the error-specific headers.
+// If err or anything in its change implements Headerer, those headers are used.
+// Otherwise, this function returns an empty http.Header.
+func headersFor(err error) (headers http.Header) {
+	var h Headerer
+	if errors.As(err, &h) {
+		headers = h.Headers()
+	}
+
+	return
 }
 
 // Causer can be implemented by errors to produce a cause, which corresponds
@@ -28,7 +60,32 @@ type Causer interface {
 	Cause() string
 }
 
-type errorEncoder func(context.Context, error, http.ResponseWriter) bool
+// causeFor is a helper that determines the cause of an error.  If err or
+// anything in its chain implements Causer, that value is used.  Otherwise,
+// Error() is used.
+func causeFor(err error) (cause string) {
+	var c Causer
+	if errors.As(err, &c) {
+		cause = c.Cause()
+	} else {
+		cause = err.Error()
+	}
+
+	return
+}
+
+// errorContext represents an encoding context for an error.
+type errorContext struct {
+	ctx context.Context
+	err error
+	rw  http.ResponseWriter
+}
+
+// errorEncoder represents an actual rule implementation that can
+// render an error as an HTTP response.  If the given error did not
+// match anything this rule could render, it will return false.
+// If this rule rendered the error, it returns true.
+type errorEncoder func(errorContext) bool
 
 // EncoderRule describes how to encode an error.  Rules are created with either Is or As.
 type EncoderRule interface {
@@ -59,7 +116,7 @@ type EncoderRule interface {
 
 	// newErrorEncoder is the internal factory method that turns this rule
 	// into something that can attempt to encode errors.
-	newErrorEncoder() errorEncoder
+	newErrorEncoder(disableBody bool) errorEncoder
 }
 
 type isEncoder struct {
@@ -69,17 +126,31 @@ type isEncoder struct {
 	fields     Fields
 }
 
-func (ie *isEncoder) newErrorEncoder() errorEncoder {
+// encodeNoBody conditionally encodes the error's status code and
+// headers, returning a boolean indicating if it handled the error.
+func (ie *isEncoder) encodeNoBody(ec errorContext) bool {
+	if !errors.Is(ec.err, ie.target) {
+		return false
+	}
+
+	ie.header.SetTo(ec.rw.Header())
+	ec.rw.WriteHeader(ie.statusCode)
+	return true
+}
+
+func (ie *isEncoder) newErrorEncoder(disableBody bool) errorEncoder {
+	if disableBody {
+		return ie.encodeNoBody
+	}
+
 	body, _ := json.Marshal(ie.fields)
-	return func(ctx context.Context, err error, rw http.ResponseWriter) bool {
-		if !errors.Is(err, ie.target) {
-			return false
+	return func(ec errorContext) bool {
+		handled := ie.encodeNoBody(ec)
+		if handled {
+			ec.rw.Write(body)
 		}
 
-		ie.header.SetTo(rw.Header())
-		rw.WriteHeader(ie.statusCode)
-		rw.Write(body)
-		return true
+		return handled
 	}
 }
 
@@ -115,32 +186,13 @@ func (ie *isEncoder) Fields(namesAndValues ...interface{}) EncoderRule {
 func Is(target error) EncoderRule {
 	ie := &isEncoder{
 		target: target,
+		header: httpaux.NewHeader(headersFor(target)),
 		fields: make(Fields, 2), // at least enough for code and cause
 	}
 
-	var sc StatusCoder
-	if errors.As(target, &sc) {
-		ie.StatusCode(sc.StatusCode())
-	} else {
-		ie.StatusCode(http.StatusInternalServerError)
-	}
-
-	var h Headerer
-	if errors.As(target, &h) {
-		ie.header = httpaux.NewHeader(h.Headers())
-	}
-
-	var c Causer
-	if errors.As(target, &c) {
-		ie.Cause(c.Cause())
-	} else {
-		ie.Cause(target.Error())
-	}
-
-	var ef ErrorFielder
-	if errors.As(target, &ef) {
-		ie.fields.Add(ef.ErrorFields()...)
-	}
+	ie.StatusCode(statusCodeFor(target))
+	ie.Cause(causeFor(target))
+	ie.fields.Add(fieldsFor(target)...)
 
 	return ie
 }
@@ -152,60 +204,55 @@ type asEncoder struct {
 	fields     Fields
 }
 
-func (ae *asEncoder) newErrorEncoder() errorEncoder {
-	return func(_ context.Context, err error, rw http.ResponseWriter) bool {
-		targetPtr := reflect.New(ae.target)
-		if !errors.As(err, targetPtr.Interface()) {
-			return false
-		}
-
+func (ae *asEncoder) encodeStatusAndHeaders(ec errorContext) (target error, statusCode int, handled bool) {
+	targetPtr := reflect.New(ae.target)
+	handled = errors.As(ec.err, targetPtr.Interface())
+	if handled {
 		// in this case, the actual instance of the target type can vary.
 		// so, we dynamically determine the things that Is can statically detect.
+		ae.header.SetTo(ec.rw.Header())
+		target = targetPtr.Elem().Interface().(error)
 
-		ae.header.SetTo(rw.Header())
-		target := targetPtr.Elem().Interface().(error)
+		for k, v := range headersFor(target) {
+			ec.rw.Header()[http.CanonicalHeaderKey(k)] = v
+		}
 
-		var h Headerer
-		if errors.As(target, &h) {
-			for k, v := range h.Headers() {
-				k = http.CanonicalHeaderKey(k)
-				rw.Header()[k] = v
+		statusCode = ae.statusCode
+		if statusCode < 100 {
+			statusCode = statusCodeFor(target)
+		}
+
+		ec.rw.WriteHeader(statusCode)
+	}
+
+	return
+}
+
+func (ae *asEncoder) encodeNoBody(ec errorContext) bool {
+	_, _, handled := ae.encodeStatusAndHeaders(ec)
+	return handled
+}
+
+func (ae *asEncoder) newErrorEncoder(disableBody bool) errorEncoder {
+	if disableBody {
+		return ae.encodeNoBody
+	}
+
+	return func(ec errorContext) bool {
+		target, statusCode, handled := ae.encodeStatusAndHeaders(ec)
+		if handled {
+			fields := ae.fields.Clone()
+			fields.SetCode(statusCode)
+			if !fields.HasCause() {
+				fields.SetCause(causeFor(target))
 			}
+
+			fields.Add(fieldsFor(target)...)
+			body, _ := json.Marshal(fields)
+			ec.rw.Write(body)
 		}
 
-		statusCode := ae.statusCode
-		if statusCode <= 0 {
-			var sc StatusCoder
-			if errors.As(target, &sc) {
-				statusCode = sc.StatusCode()
-			}
-		}
-
-		if statusCode <= 0 {
-			statusCode = http.StatusInternalServerError
-		}
-
-		fields := ae.fields.Clone()
-		fields.SetCode(statusCode)
-		if !fields.HasCause() {
-			var c Causer
-			if errors.As(target, &c) {
-				fields.SetCause(c.Cause())
-			} else {
-				fields.SetCause(target.Error())
-			}
-		}
-
-		rw.WriteHeader(statusCode)
-
-		var ef ErrorFielder
-		if errors.As(target, &ef) {
-			fields.Add(ef.ErrorFields()...)
-		}
-
-		body, _ := json.Marshal(fields)
-		rw.Write(body)
-		return true
+		return handled
 	}
 }
 
@@ -272,7 +319,7 @@ func As(target interface{}) EncoderRule {
 
 	return &asEncoder{
 		target: targetType,
-		fields: make(Fields, 2),
+		fields: Fields{},
 	}
 }
 
@@ -286,13 +333,32 @@ func As(target interface{}) EncoderRule {
 // optional interfaces that custom errors may implement that can tailor parts of the
 // HTTP response.
 type Encoder struct {
-	encoders []errorEncoder
+	encoders    []errorEncoder
+	disableBody bool
+}
+
+// Body controls whether HTTP response bodies are rendered for any rules added
+// afterward.  By default, an Encoder will render a JSON payload for each error.
+//
+// Invoking this method only affects subsequent calls up to the next invocation:
+//
+//   Encoder{}.
+//     Body(false).
+//       // these errors will be rendered without a body
+//       Is(ErrSomething).
+//       As((*SomeError)(nil).
+//     Body(true).
+//       // this error will be rendered with a body
+//       As((*MyError)(nil)) // this will be rendered with a body
+func (e Encoder) Body(v bool) Encoder {
+	e.disableBody = !v
+	return e
 }
 
 // Add defines rules created with either Is or As.
 func (e Encoder) Add(rules ...EncoderRule) Encoder {
 	for _, r := range rules {
-		e.encoders = append(e.encoders, r.newErrorEncoder())
+		e.encoders = append(e.encoders, r.newErrorEncoder(e.disableBody))
 	}
 
 	return e
@@ -329,18 +395,36 @@ func (e Encoder) Add(rules ...EncoderRule) Encoder {
 func (e Encoder) Encode(ctx context.Context, err error, rw http.ResponseWriter) {
 	// always output JSON
 	rw.Header().Set("Content-Type", "application/json")
+
+	ec := errorContext{
+		ctx: ctx,
+		err: err,
+		rw:  rw,
+	}
+
 	for _, rule := range e.encoders {
-		if rule(ctx, err, rw) {
+		if rule(ec) {
 			return
 		}
 	}
 
 	// fallback
-	rw.WriteHeader(http.StatusInternalServerError)
-	body, _ := json.Marshal(NewFields(
-		http.StatusInternalServerError,
-		err.Error(),
-	))
+	// still honor the basic interfaces in this package, even though
+	// there are no rules
+	for k, v := range headersFor(err) {
+		ec.rw.Header()[http.CanonicalHeaderKey(k)] = v
+	}
 
-	rw.Write(body)
+	statusCode := statusCodeFor(err)
+	rw.WriteHeader(statusCode)
+	if !e.disableBody {
+		fields := NewFields(
+			statusCode,
+			causeFor(err),
+		)
+
+		fields.Add(fieldsFor(err)...)
+		body, _ := json.Marshal(fields)
+		rw.Write(body)
+	}
 }

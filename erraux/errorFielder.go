@@ -1,6 +1,9 @@
 package erraux
 
-import "net/http"
+import (
+	"errors"
+	"net/http"
+)
 
 const (
 	codeFieldName  = "code"
@@ -13,6 +16,18 @@ type ErrorFielder interface {
 	// ErrorFields can return any desired fields that flesh out the error.
 	// The returned slice is in the same format as Fields.Add.
 	ErrorFields() []interface{}
+}
+
+// fieldsFor is a helper that determines the extra JSON fields for an
+// error.  If err or anything in its chain implements ErrorFielder,
+// those fields are used.  Otherwise, this function returns an empty slice.
+func fieldsFor(err error) (fields []interface{}) {
+	var ef ErrorFielder
+	if errors.As(err, &ef) {
+		fields = ef.ErrorFields()
+	}
+
+	return
 }
 
 // Fields holds JSON fields for an error.
