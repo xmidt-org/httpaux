@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.2.0]
 - added erraux.Causer and the ability to customize cause in erraux.Encoder
 - changed the signature of ErrorFielder.ErrorFields to avoid a dependency on erraux
 - added erraux.Encoder.Body to dynamically disable/enable bodies for error rules
@@ -52,7 +54,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Error type that exposes HTTP metadata for rendering a response
 - Sonar integration
 
-[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.1.6..HEAD
+[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.2.0..HEAD
+[v0.2.0]: https://github.com/xmidt-org/httpaux/compare/v0.1.6...v0.2.0
 [v0.1.6]: https://github.com/xmidt-org/httpaux/compare/v0.1.5...v0.1.6
 [v0.1.5]: https://github.com/xmidt-org/httpaux/compare/v0.1.4...v0.1.5
 [v0.1.4]: https://github.com/xmidt-org/httpaux/compare/v0.1.3...v0.1.4
