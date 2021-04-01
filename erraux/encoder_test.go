@@ -82,6 +82,24 @@ func (suite *EncoderTestSuite) TestIs() {
 		)
 	})
 
+	suite.Run("NoBody", func() {
+		simpleErr := errors.New("this should not appear")
+		m := Encoder{}.Body(false).Add(
+			Is(simpleErr),
+		)
+
+		response := httptest.NewRecorder()
+		m.Encode(
+			context.Background(),
+			simpleErr,
+			response,
+		)
+
+		statusCode, _, body := suite.result(response)
+		suite.Equal(http.StatusInternalServerError, statusCode)
+		suite.Empty(body)
+	})
+
 	suite.Run("Custom", func() {
 		customErr := &Error{
 			Err:     errors.New("nested"),
@@ -235,6 +253,38 @@ func (suite *EncoderTestSuite) TestAs() {
 		)
 	})
 
+	suite.Run("NoBody", func() {
+		customErr := &Error{
+			Err:     errors.New("nested"),
+			Message: "a message",
+			Code:    567,
+			Header: http.Header{
+				"Custom": {"value1", "value2"},
+			},
+			Fields: Fields{"custom": []string{"a", "b"}},
+		}
+
+		m := Encoder{}.Body(false).
+			Add(As((*Error)(nil)))
+		response := httptest.NewRecorder()
+		m.Encode(
+			context.Background(),
+			customErr,
+			response,
+		)
+
+		statusCode, h, body := suite.result(response)
+		suite.Equal(567, statusCode)
+		suite.assertHeader(
+			http.Header{
+				"Custom": {"value1", "value2"},
+			},
+			h,
+		)
+
+		suite.Empty(body)
+	})
+
 	suite.Run("CustomRule", func() {
 		customErr := &Error{
 			Err:     errors.New("nested"),
@@ -346,6 +396,34 @@ func (suite *EncoderTestSuite) TestAs() {
 			body,
 		)
 	})
+}
+
+func (suite *EncoderTestSuite) TestFallthroughWithCustom() {
+	response := httptest.NewRecorder()
+	Encoder{}.Encode(
+		context.Background(),
+		&Error{
+			Err:    errors.New("cause"),
+			Code:   592,
+			Header: http.Header{"Custom": {"true"}},
+			Fields: Fields{"foo": "bar"},
+		},
+		response,
+	)
+
+	statusCode, h, body := suite.result(response)
+	suite.Equal(592, statusCode)
+	suite.assertHeader(
+		http.Header{
+			"Custom": {"true"},
+		},
+		h,
+	)
+
+	suite.JSONEq(
+		`{"code": 592, "cause": "cause", "foo": "bar"}`,
+		body,
+	)
 }
 
 func TestEncoder(t *testing.T) {
