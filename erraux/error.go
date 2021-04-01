@@ -78,11 +78,14 @@ func (e *Error) Headers() http.Header {
 
 // ErrorFields fulfills the ErrorFielder interface and allows this error to
 // supply additional fields that describe the error.
-func (e *Error) ErrorFields(f Fields) {
-	f.Merge(e.Fields)
+func (e *Error) ErrorFields() []interface{} {
+	nav := make([]interface{}, 0, len(e.Fields)+1)
+	nav = e.Fields.Append(nav)
 	if len(e.Message) > 0 {
-		f["message"] = e.Message
+		nav = append(nav, "message", e.Message)
 	}
+
+	return nav
 }
 
 // MarshalJSON allows this Error to be marshaled directly as JSON.
@@ -90,7 +93,11 @@ func (e *Error) ErrorFields(f Fields) {
 // used with an Encoder, this method is not used.
 func (e *Error) MarshalJSON() ([]byte, error) {
 	f := NewFields(e.Code, e.Cause())
-	e.ErrorFields(f)
+	f.Merge(e.Fields)
+	if len(e.Message) > 0 {
+		f["message"] = e.Message
+	}
+
 	return json.Marshal(f)
 }
 

@@ -139,7 +139,7 @@ func Is(target error) EncoderRule {
 
 	var ef ErrorFielder
 	if errors.As(target, &ef) {
-		ef.ErrorFields(ie.fields)
+		ie.fields.Add(ef.ErrorFields()...)
 	}
 
 	return ie
@@ -200,7 +200,7 @@ func (ae *asEncoder) newErrorEncoder() errorEncoder {
 
 		var ef ErrorFielder
 		if errors.As(target, &ef) {
-			ef.ErrorFields(fields)
+			fields.Add(ef.ErrorFields()...)
 		}
 
 		body, _ := json.Marshal(fields)
