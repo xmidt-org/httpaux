@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 - added erraux.Causer and the ability to customize cause in erraux.Encoder
 - changed the signature of ErrorFielder.ErrorFields to avoid a dependency on erraux
+- added erraux.Encoder.Body to dynamically disable/enable bodies for error rules
+- erraux.Encoder now honors the optional error interfaces when no rules apply
 
 ## [v0.1.6]
 - allow appending and extending Header while mainting immutability
