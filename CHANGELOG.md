@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- don't cancel contexts during retries to allow clients to read responses
+- always stop retries when the enclosing context is canceled
 
 ## [v0.2.1]
 - fixed the changelog syntax
