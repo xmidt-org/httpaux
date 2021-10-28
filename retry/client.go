@@ -47,10 +47,6 @@ type Client struct {
 	// next is the decorated client used to execute HTTP transactions
 	next httpaux.Client
 
-	// maxElapsedTime is used for the parent context for all retries
-	// if this value is nonpositive, no enforcement of max elapsed time is done
-	maxElapsedTime time.Duration
-
 	// intervals is the precomputed retry intervals, including jitter
 	intervals intervals
 
@@ -71,12 +67,11 @@ type Client struct {
 // is nil, http.DefaultClient is used.
 func New(cfg Config, next httpaux.Client) (c *Client) {
 	c = &Client{
-		next:           next,
-		maxElapsedTime: cfg.MaxElapsedTime,
-		intervals:      newIntervals(cfg),
-		random:         cfg.Random,
-		timer:          cfg.Timer,
-		check:          cfg.Check,
+		next:      next,
+		intervals: newIntervals(cfg),
+		random:    cfg.Random,
+		timer:     cfg.Timer,
+		check:     cfg.Check,
 	}
 
 	if c.next == nil {
@@ -111,19 +106,13 @@ func (c *Client) Retries() int {
 }
 
 // initialize sets up a series of retry attempts for a given request
-func (c *Client) initialize(original *http.Request) (s *State, retryCtx context.Context, cancel context.CancelFunc) {
-	s = &State{
+func (c *Client) initialize(original *http.Request) (*State, context.Context) {
+	s := &State{
 		retries: c.intervals.Len(),
 	}
 
-	retryCtx = withState(original.Context(), s)
-	if c.maxElapsedTime > 0 {
-		retryCtx, cancel = context.WithTimeout(retryCtx, c.maxElapsedTime)
-	} else {
-		retryCtx, cancel = context.WithCancel(retryCtx)
-	}
-
-	return
+	retryCtx := withState(original.Context(), s)
+	return s, retryCtx
 }
 
 // Do takes in an original *http.Request and makes an initial attempt plus
@@ -132,12 +121,8 @@ func (c *Client) initialize(original *http.Request) (s *State, retryCtx context.
 // For each request, a State instance is put into the request's context that
 // allows decorated clients to access information about the current attempt.
 // Decorated code can obtain this State with a call to GetState.
-//
-// Event if no retries are configured, this method will still enforce any MaxElapsedTime
-// that was set.  It will also still place a State into the context for decorated clients.
 func (c *Client) Do(original *http.Request) (*http.Response, error) {
-	state, retryCtx, cancel := c.initialize(original)
-	defer cancel()
+	state, retryCtx := c.initialize(original)
 
 	// make the initial attempt
 	// if no retries were configured, we won't even bother to invoke the check
@@ -175,12 +160,7 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 		}
 
 		response, err = c.next.Do(original.WithContext(retryCtx))
-		if err != nil && retryCtx.Err() != nil {
-			// either the original request context has been canceled or
-			// MaxElapsedTime has been reached.  in either case, we don't
-			// want to invoke the check since that can give false positives.
-			// For example, context.DeadlineExceeded is a Temporary error.
-
+		if retryCtx.Err() != nil {
 			httpaux.Cleanup(response) // just in case we have a misbehaving next client
 			return nil, retryCtx.Err()
 		} else if !c.check(response, err) {
