@@ -19,14 +19,6 @@ type Config struct {
 	// value unset will disable retries even if any other fields of this type are set.
 	Retries int `json:"retries" yaml:"retries"`
 
-	// MaxElapsedTime is the optional duration that all HTTP transactions together cannot
-	// exceed.  This value includes the initial attempt with all retries.  If this duration
-	// is exceeded, retry attempts will be short circuited.
-	//
-	// There is no default for this field.  Leaving this field unset means that retries up to
-	// the Retries value  will continue unless the request's context expires.
-	MaxElapsedTime time.Duration `json:"maxElapsedTime" yaml:"maxElapsedTime"`
-
 	// Interval is the base duration between each retry attempt.  If nonpositive, DefaultInterval
 	// is used.
 	//
