@@ -133,8 +133,8 @@ func (suite *MiddlewareSuite) TestFullyCustomized() {
 
 	suite.Equal(588, response.Code)
 	suite.Equal(customRecoverBody, response.Body.String())
-	suite.Equal("true", response.HeaderMap.Get("Custom1"))
-	suite.Equal("true", response.HeaderMap.Get("Custom2"))
+	suite.Equal("true", response.Result().Header.Get("Custom1"))
+	suite.Equal("true", response.Result().Header.Get("Custom2"))
 	suite.True(onRecover1Called)
 	suite.True(onRecover2Called)
 	suite.Contains(response.Body.String(), customRecoverBody)
@@ -158,7 +158,7 @@ func (suite *MiddlewareSuite) TestEnrichedPanicValue() {
 	)
 
 	suite.Equal(567, response.Code)
-	suite.Equal("true", response.HeaderMap.Get("Fubar"))
+	suite.Equal("true", response.Result().Header.Get("Fubar"))
 	suite.Contains(response.Body.String(), expected.String())
 }
 
