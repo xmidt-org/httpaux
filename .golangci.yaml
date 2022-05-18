@@ -24,6 +24,7 @@ issues:
       linters:
         - dupl
         - funlen
+        - bodyclose
 
 linters-settings:
   errorlint:
