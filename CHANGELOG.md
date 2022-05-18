@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [v0.3.1]
 - configurable recovery middleware that prevents panics from shutting down the http.Server
 
 ## [v0.3.0]
@@ -62,7 +64,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Error type that exposes HTTP metadata for rendering a response
 - Sonar integration
 
-[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.3.0..HEAD
+[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.3.1..HEAD
+[v0.3.1]: https://github.com/xmidt-org/httpaux/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/xmidt-org/httpaux/compare/v0.2.1...v0.3.0
 [v0.2.1]: https://github.com/xmidt-org/httpaux/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/xmidt-org/httpaux/compare/v0.1.6...v0.2.0
