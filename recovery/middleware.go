@@ -134,16 +134,6 @@ func WithHeader(h httpaux.Header) Option {
 	})
 }
 
-// Then decorates a handler with zero or more options.
-func Then(next http.Handler, options ...Option) http.Handler {
-	return Middleware(options...)(next)
-}
-
-// ThenFunc is an alternative to Then for handler functions.
-func ThenFunc(next http.HandlerFunc, options ...Option) http.Handler {
-	return Middleware(options...)(next)
-}
-
 // Middleware creates a http.Handler decorator that recovers any panics
 // from downstream handlers.
 //
