@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.3.2]
+- update dependencies and fix [this](https://github.com/xmidt-org/httpaux/issues/47) security issue
+
 ## [v0.3.1]
 - configurable recovery middleware that prevents panics from shutting down the http.Server
 
@@ -64,7 +67,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Error type that exposes HTTP metadata for rendering a response
 - Sonar integration
 
-[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.3.1..HEAD
+[Unreleased]: https://github.com/xmidt-org/httpaux/compare/v0.3.2..HEAD
+[v0.3.2]: https://github.com/xmidt-org/httpaux/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/xmidt-org/httpaux/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/xmidt-org/httpaux/compare/v0.2.1...v0.3.0
 [v0.2.1]: https://github.com/xmidt-org/httpaux/compare/v0.2.0...v0.2.1
