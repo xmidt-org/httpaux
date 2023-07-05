@@ -16,59 +16,59 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type RoundTripperTestSuite struct {
+type RoundTripperSuite struct {
 	suite.Suite
 
 	// server is used to test delegations
 	server *httptest.Server
 }
 
-var _ suite.SetupAllSuite = (*RoundTripperTestSuite)(nil)
-var _ suite.TearDownAllSuite = (*RoundTripperTestSuite)(nil)
+var _ suite.SetupAllSuite = (*RoundTripperSuite)(nil)
+var _ suite.TearDownAllSuite = (*RoundTripperSuite)(nil)
 
 // assertResponse verifies that the response came from the handler method
-func (suite *RoundTripperTestSuite) assertResponse(r *http.Response) {
+func (suite *RoundTripperSuite) assertResponse(r *http.Response) {
 	suite.Require().NotNil(r)
 
 	if suite.NotNil(r.Body) {
 		defer r.Body.Close()
 		b, err := ioutil.ReadAll(r.Body)
 		if suite.NoError(err) {
-			suite.Equal("RoundTripperTestSuite", string(b))
+			suite.Equal("RoundTripperSuite", string(b))
 		}
 	}
 
 	suite.Equal(
 		"true",
-		r.Header.Get("RoundTripperTestSuite"),
+		r.Header.Get("RoundTripperSuite"),
 	)
 
 	suite.Equal(299, r.StatusCode)
 }
 
-func (suite *RoundTripperTestSuite) newRequest(method, url string, body io.Reader) *http.Request {
+func (suite *RoundTripperSuite) newRequest(method, url string, body io.Reader) *http.Request {
 	r, err := http.NewRequest(method, url, body)
 	suite.Require().NoError(err)
 	return r
 }
 
-func (suite *RoundTripperTestSuite) handler(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Set("RoundTripperTestSuite", "true")
+func (suite *RoundTripperSuite) handler(rw http.ResponseWriter, r *http.Request) {
+	rw.Header().Set("RoundTripperSuite", "true")
 	rw.WriteHeader(299)
-	rw.Write([]byte("RoundTripperTestSuite"))
+	rw.Write([]byte("RoundTripperSuite"))
 }
 
-func (suite *RoundTripperTestSuite) SetupSuite() {
+func (suite *RoundTripperSuite) SetupSuite() {
 	suite.server = httptest.NewServer(
 		http.HandlerFunc(suite.handler),
 	)
 }
 
-func (suite *RoundTripperTestSuite) TearDownSuite() {
+func (suite *RoundTripperSuite) TearDownSuite() {
 	suite.server.Close()
 }
 
-func (suite *RoundTripperTestSuite) TestSuite() {
+func (suite *RoundTripperSuite) TestSuite() {
 	var (
 		transport   = NewRoundTripperSuite(suite)
 		expected    = new(http.Response)
@@ -85,7 +85,7 @@ func (suite *RoundTripperTestSuite) TestSuite() {
 	transport.AssertExpectations()
 }
 
-func (suite *RoundTripperTestSuite) TestSimple() {
+func (suite *RoundTripperSuite) testSimpleReturn() {
 	var (
 		testingT    = wrapTestingT(suite.T())
 		transport   = NewRoundTripper(testingT)
@@ -104,7 +104,49 @@ func (suite *RoundTripperTestSuite) TestSimple() {
 	transport.AssertExpectations()
 }
 
-func (suite *RoundTripperTestSuite) TestMockRequestAssertions() {
+func (suite *RoundTripperSuite) testSimpleResponse() {
+	var (
+		testingT  = wrapTestingT(suite.T())
+		transport = NewRoundTripper(testingT)
+		expected  = new(http.Response)
+	)
+
+	transport.OnAny().Response(expected).Once()
+	actual, actualErr := transport.RoundTrip(new(http.Request))
+	suite.True(expected == actual)
+	suite.NoError(actualErr)
+
+	suite.Zero(testingT.Logs)
+	suite.Zero(testingT.Errors)
+	suite.Zero(testingT.Failures)
+	transport.AssertExpectations()
+}
+
+func (suite *RoundTripperSuite) testSimpleError() {
+	var (
+		testingT  = wrapTestingT(suite.T())
+		transport = NewRoundTripper(testingT)
+		expected  = errors.New("expected")
+	)
+
+	transport.OnAny().Error(expected).Once()
+	response, actual := transport.RoundTrip(new(http.Request))
+	suite.Nil(response)
+	suite.Same(expected, actual)
+
+	suite.Zero(testingT.Logs)
+	suite.Zero(testingT.Errors)
+	suite.Zero(testingT.Failures)
+	transport.AssertExpectations()
+}
+
+func (suite *RoundTripperSuite) TestSimple() {
+	suite.Run("Return", suite.testSimpleReturn)
+	suite.Run("Response", suite.testSimpleResponse)
+	suite.Run("Error", suite.testSimpleError)
+}
+
+func (suite *RoundTripperSuite) TestMockRequestAssertions() {
 	suite.Run("Pass", func() {
 		var (
 			testingT  = wrapTestingT(suite.T())
@@ -166,7 +208,7 @@ func (suite *RoundTripperTestSuite) TestMockRequestAssertions() {
 	})
 }
 
-func (suite *RoundTripperTestSuite) TestCallRequestAssertions() {
+func (suite *RoundTripperSuite) TestCallRequestAssertions() {
 	suite.Run("Pass", func() {
 		var (
 			testingT  = wrapTestingT(suite.T())
@@ -232,7 +274,7 @@ func (suite *RoundTripperTestSuite) TestCallRequestAssertions() {
 	})
 }
 
-func (suite *RoundTripperTestSuite) TestOnRequest() {
+func (suite *RoundTripperSuite) TestOnRequest() {
 	suite.Run("Pass", func() {
 		var (
 			testingT  = wrapTestingT(suite.T())
@@ -276,7 +318,7 @@ func (suite *RoundTripperTestSuite) TestOnRequest() {
 	})
 }
 
-func (suite *RoundTripperTestSuite) TestOnMatchAll() {
+func (suite *RoundTripperSuite) TestOnMatchAll() {
 	suite.Run("Pass", func() {
 		var (
 			testingT  = wrapTestingT(suite.T())
@@ -344,7 +386,7 @@ func (suite *RoundTripperTestSuite) TestOnMatchAll() {
 	})
 }
 
-func (suite *RoundTripperTestSuite) TestOnMatchAny() {
+func (suite *RoundTripperSuite) TestOnMatchAny() {
 	suite.Run("Pass", func() {
 		var (
 			testingT  = wrapTestingT(suite.T())
@@ -400,7 +442,7 @@ func (suite *RoundTripperTestSuite) TestOnMatchAny() {
 	})
 }
 
-func (suite *RoundTripperTestSuite) TestCustomRun() {
+func (suite *RoundTripperSuite) TestCustomRun() {
 	suite.Run("NoAssertions", func() {
 		var (
 			testingT  = wrapTestingT(suite.T())
@@ -491,7 +533,7 @@ func (suite *RoundTripperTestSuite) TestCustomRun() {
 	})
 }
 
-func (suite *RoundTripperTestSuite) TestNext() {
+func (suite *RoundTripperSuite) TestNext() {
 	suite.Run("Nil", func() {
 		var (
 			testingT = wrapTestingT(suite.T())
@@ -532,7 +574,7 @@ func (suite *RoundTripperTestSuite) TestNext() {
 }
 
 func TestRoundTripper(t *testing.T) {
-	suite.Run(t, new(RoundTripperTestSuite))
+	suite.Run(t, new(RoundTripperSuite))
 }
 
 func TestCloseIdler(t *testing.T) {
