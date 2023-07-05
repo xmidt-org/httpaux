@@ -61,6 +61,18 @@ func (rtc *RoundTripCall) Run(f func(mock.Arguments)) *RoundTripCall {
 	return rtc
 }
 
+// Response is a simpler form of Return that correctly sets this call to
+// return an *http.Response with a nil error.
+func (rtc *RoundTripCall) Response(r *http.Response) *RoundTripCall {
+	return rtc.Return(r, nil)
+}
+
+// Error is a simpler form of Return that correctly sets this call to
+// return a nil *http.Response with the given error.
+func (rtc *RoundTripCall) Error(err error) *RoundTripCall {
+	return rtc.Return(nil, err)
+}
+
 // Return establishes the return values for this RoundTrip invocation.
 //
 // If this method is not used, the Next round tripper set on the container
@@ -248,11 +260,11 @@ func (m *RoundTripper) AssertExpectations() {
 // CloseIdler is a mocked httpaux.CloseIdler that also mocks http.RoundTripper.
 // Typical construction is:
 //
-//   func(t *testing.T) {
-//     ci := &CloseIdler{
-//       RoundTripper: NewRoundTripper(t),
-//     }
-//   }
+//	func(t *testing.T) {
+//	  ci := &CloseIdler{
+//	    RoundTripper: NewRoundTripper(t),
+//	  }
+//	}
 type CloseIdler struct {
 	*RoundTripper
 }
