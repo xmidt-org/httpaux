@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -17,7 +16,7 @@ type BodyReadCloserTestSuite struct {
 func (suite *BodyReadCloserTestSuite) testBodyReadCloser(body *BodyReadCloser, expected []byte) {
 	suite.Require().NotNil(body)
 
-	actual, err := ioutil.ReadAll(body)
+	actual, err := io.ReadAll(body)
 	suite.Equal(expected, actual)
 	suite.NoError(err)
 
@@ -58,7 +57,7 @@ func (suite *BodyReadCloserTestSuite) TestBodyf() {
 }
 
 func (suite *BodyReadCloserTestSuite) TestNopCloser() {
-	body := ioutil.NopCloser(
+	body := io.NopCloser(
 		bytes.NewBufferString("this body doesn't implement Closeable"),
 	)
 

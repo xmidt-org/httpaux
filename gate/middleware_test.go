@@ -3,7 +3,6 @@ package gate
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -174,7 +173,7 @@ func (suite *ClientTestSuite) TestDefaultOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
-		io.Copy(ioutil.Discard, response.Body)
+		io.Copy(io.Discard, response.Body)
 		response.Body.Close()
 	})
 
@@ -185,7 +184,7 @@ func (suite *ClientTestSuite) TestDefaultOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
-		io.Copy(ioutil.Discard, response.Body)
+		io.Copy(io.Discard, response.Body)
 		response.Body.Close()
 	})
 }
@@ -198,7 +197,7 @@ func (suite *ClientTestSuite) TestDefaultClosed() {
 		response, err := suite.checkRoundTripper(rt)
 
 		if !suite.Nil(response) {
-			io.Copy(ioutil.Discard, response.Body)
+			io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 		}
 
@@ -210,7 +209,7 @@ func (suite *ClientTestSuite) TestDefaultClosed() {
 		response, err := suite.checkRoundTripper(rt)
 
 		if !suite.Nil(response) {
-			io.Copy(ioutil.Discard, response.Body)
+			io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 		}
 
@@ -229,7 +228,7 @@ func (suite *ClientTestSuite) TestCustomOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
-		io.Copy(ioutil.Discard, response.Body)
+		io.Copy(io.Discard, response.Body)
 		response.Body.Close()
 	})
 
@@ -243,7 +242,7 @@ func (suite *ClientTestSuite) TestCustomOpen() {
 		suite.NoError(err)
 		suite.Require().NotNil(response)
 		suite.Equal(277, response.StatusCode)
-		io.Copy(ioutil.Discard, response.Body)
+		io.Copy(io.Discard, response.Body)
 		response.Body.Close()
 	})
 }
@@ -259,7 +258,7 @@ func (suite *ClientTestSuite) TestCustomClosed() {
 		response, err := suite.checkRoundTripper(rt)
 
 		if !suite.Nil(response) {
-			io.Copy(ioutil.Discard, response.Body)
+			io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 		}
 
@@ -274,7 +273,7 @@ func (suite *ClientTestSuite) TestCustomClosed() {
 		response, err := suite.checkRoundTripper(rt)
 
 		if !suite.Nil(response) {
-			io.Copy(ioutil.Discard, response.Body)
+			io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 		}
 

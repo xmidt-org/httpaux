@@ -3,7 +3,7 @@ package erraux
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +29,7 @@ func (suite *EncoderTestSuite) result(rw *httptest.ResponseRecorder) (statusCode
 	h = result.Header
 	suite.Equal("application/json", h.Get("Content-Type"))
 
-	b, err := ioutil.ReadAll(result.Body)
+	b, err := io.ReadAll(result.Body)
 	suite.Require().NoError(err)
 	body = string(b)
 

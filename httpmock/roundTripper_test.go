@@ -4,7 +4,6 @@ package httpmock
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -32,7 +31,7 @@ func (suite *RoundTripperSuite) assertResponse(r *http.Response) {
 
 	if suite.NotNil(r.Body) {
 		defer r.Body.Close()
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if suite.NoError(err) {
 			suite.Equal("RoundTripperSuite", string(b))
 		}

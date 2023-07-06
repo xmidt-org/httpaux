@@ -2,7 +2,6 @@ package httpaux
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -20,7 +19,7 @@ var _ Client = (*http.Client)(nil)
 // does nothing.
 func Cleanup(r *http.Response) {
 	if r != nil && r.Body != nil {
-		io.Copy(ioutil.Discard, r.Body)
+		io.Copy(io.Discard, r.Body)
 		r.Body.Close()
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -86,7 +85,7 @@ func (suite *ClientTestSuite) handler(rw http.ResponseWriter, actual *http.Reque
 	suite.Equal(suite.expected.URL.Path, actual.URL.Path)
 	suite.Equal(int64(len(suite.expectedBody)), actual.ContentLength)
 
-	b, err := ioutil.ReadAll(actual.Body)
+	b, err := io.ReadAll(actual.Body)
 	suite.NoError(err)
 	suite.Equal(suite.expectedBody, string(b))
 
@@ -105,7 +104,7 @@ func (suite *ClientTestSuite) assertResponse(r *http.Response) {
 
 	suite.Require().NotNil(r.Body)
 	defer r.Body.Close()
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	suite.NoError(err)
 	suite.Equal("ClientTestSuite", string(b))
 }
