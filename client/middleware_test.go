@@ -25,9 +25,9 @@ func TestFunc(t *testing.T) {
 
 	//nolint:bodyclose
 	actual, actualErr := Func(func(r *http.Request) (*http.Response, error) {
-		assert.True(request == r)
+		assert.Same(request, r)
 		return expected, expectedErr
-	})(request)
+	}).Do(request)
 
 	assert.True(expected == actual)
 	assert.Equal(expectedErr, actualErr)
