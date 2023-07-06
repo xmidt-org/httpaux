@@ -213,7 +213,8 @@ type BodyJSON string
 //
 // (1) The request body is nil AND this expected JSON is an empty string
 // (2) The request body is not nil AND it matches this expected JSON.  The
-//     match is done via stretchr/testify/assert.JSONEq.
+//
+//	match is done via stretchr/testify/assert.JSONEq.
 func (b BodyJSON) Assert(assert *assert.Assertions, r *http.Request) {
 	if r.Body == nil {
 		// if the body is nil, the only possible match is an empty string
