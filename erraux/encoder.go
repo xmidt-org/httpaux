@@ -342,14 +342,14 @@ type Encoder struct {
 //
 // Invoking this method only affects subsequent calls up to the next invocation:
 //
-//   Encoder{}.
-//     Body(false).
-//       // these errors will be rendered without a body
-//       Is(ErrSomething).
-//       As((*SomeError)(nil).
-//     Body(true).
-//       // this error will be rendered with a body
-//       As((*MyError)(nil)) // this will be rendered with a body
+//	Encoder{}.
+//	  Body(false).
+//	    // these errors will be rendered without a body
+//	    Is(ErrSomething).
+//	    As((*SomeError)(nil).
+//	  Body(true).
+//	    // this error will be rendered with a body
+//	    As((*MyError)(nil)) // this will be rendered with a body
 func (e Encoder) Body(v bool) Encoder {
 	e.disableBody = !v
 	return e
@@ -372,21 +372,21 @@ func (e Encoder) Add(rules ...EncoderRule) Encoder {
 // status code, and will be the same as what was passed to WriteHeader.  The cause field is
 // the value of Error().  For example:
 //
-//   {"code": 404, "cause": "resource not found"}
-//   {"code": 500, "cause": "parsing error"}
+//	{"code": 404, "cause": "resource not found"}
+//	{"code": 500, "cause": "parsing error"}
 //
 // Beyond that, errors may implement StatusCoder, Headerer, and ErrorFielder
 // to tailor the HTTP representation.  Any status code set on the rules will override any
 // value the error supplies.  For example:
 //
-//   type MyError struct{}
-//   func (e *MyError) StatusCode() int { return 504 }
-//   func (e *MyError) Error() string { "my error" }
+//	type MyError struct{}
+//	func (e *MyError) StatusCode() int { return 504 }
+//	func (e *MyError) Error() string { "my error" }
 //
-//   // this will override MyError.StatusCode
-//   e := erraux.Encoder{}.Add(
-//       erraux.As((*MyError)(nil)).StatusCode(500),
-//   )
+//	// this will override MyError.StatusCode
+//	e := erraux.Encoder{}.Add(
+//	    erraux.As((*MyError)(nil)).StatusCode(500),
+//	)
 //
 // By contrast, an headers or fields set on the rule will be appended to whatever the
 // error defines at runtime.

@@ -26,11 +26,11 @@ type Check func(*http.Response, error) bool
 // This default implementation returns true under the following conditions:
 //
 //   - The response is not nil and the status code is one of:
-//       http.StatusRequestTimeout
-//       http.StatusTooManyRequests
-//       http.StatusGatewayTimeout
+//     http.StatusRequestTimeout
+//     http.StatusTooManyRequests
+//     http.StatusGatewayTimeout
 //   - The error is not nil and:
-//       supplies a "Temporary() bool" method that returns true (including any wrapped errors)
+//     supplies a "Temporary() bool" method that returns true (including any wrapped errors)
 //
 // A consequence of honoring the Temporary() method on errors is that transient network errors
 // will be retried.  Examples of this include DNS errors that are marked as temporary.

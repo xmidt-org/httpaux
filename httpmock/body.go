@@ -93,7 +93,7 @@ func BodyString(b string) *BodyReadCloser {
 // Bodyf produces a body with fmt.Sprintf.  This function is
 // equivalent to:
 //
-//   BodyString(fmt.Sprintf(format, args...))
+//	BodyString(fmt.Sprintf(format, args...))
 func Bodyf(format string, args ...interface{}) *BodyReadCloser {
 	return BodyString(
 		fmt.Sprintf(format, args...),
