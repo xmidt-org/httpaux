@@ -26,7 +26,7 @@ func TestFunc(t *testing.T) {
 	actual, actualErr := Func(func(r *http.Request) (*http.Response, error) {
 		assert.True(request == r)
 		return expected, expectedErr
-	})(request)
+	}).RoundTrip(request)
 
 	assert.True(expected == actual)
 	assert.Equal(expectedErr, actualErr)
