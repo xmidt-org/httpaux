@@ -3,7 +3,6 @@ package httpmock
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -370,7 +369,7 @@ func (suite *RequestCheckerTestSuite) TestBody() {
 		}()
 
 		request := &http.Request{
-			Body: ioutil.NopCloser(reader),
+			Body: io.NopCloser(reader),
 		}
 
 		t := wrapTestingT(suite.T())
@@ -462,7 +461,7 @@ func (suite *RequestCheckerTestSuite) TestBodyJSON() {
 		}()
 
 		request := &http.Request{
-			Body: ioutil.NopCloser(reader),
+			Body: io.NopCloser(reader),
 		}
 
 		t := wrapTestingT(suite.T())

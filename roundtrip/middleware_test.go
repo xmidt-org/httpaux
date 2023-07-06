@@ -3,7 +3,6 @@ package roundtrip
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -80,7 +79,7 @@ func (suite *ChainTestSuite) assertRequest(expectedOrder []int, transport http.R
 	suite.Require().NoError(err)
 
 	defer response.Body.Close()
-	io.Copy(ioutil.Discard, response.Body)
+	io.Copy(io.Discard, response.Body)
 	suite.Equal(expectedOrder, suite.order, "the decorators did not run in the expected order")
 	suite.Equal(299, response.StatusCode, "the test server was not invoked")
 }
