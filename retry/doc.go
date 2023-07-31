@@ -29,5 +29,7 @@ The basic formula for each time to wait before the next retry, in terms of Confi
 where n is the 0-based retry.
 
 See the documentation for the Config type for more details.
+
+Deprecated:  This functionality is moving to github.com/xmidt-org/retry
 */
 package retry
