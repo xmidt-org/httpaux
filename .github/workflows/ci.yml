@@ -24,4 +24,5 @@ jobs:
     with:
       copyright-skip: true
       release-type:   library
+      yaml-lint-skip: false
     secrets: inherit
