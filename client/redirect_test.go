@@ -191,44 +191,70 @@ func (suite *RedirectTestSuite) testNewCheckRedirectsNil() {
 	)
 
 	suite.Nil(
-		NewCheckRedirects(nil, suite.checkRedirectSuccess),
-	)
-
-	suite.Nil(
-		NewCheckRedirects(suite.checkRedirectSuccess, nil, suite.checkRedirectSuccess),
+		NewCheckRedirects(nil, nil, nil),
 	)
 }
 
 func (suite *RedirectTestSuite) testNewCheckRedirectsSuccess() {
-	for _, count := range []int{1, 2, 5} {
-		suite.Run(fmt.Sprintf("count=%d", count), func() {
-			checkRedirect := NewCheckRedirects(
-				suite.checkRedirectSuccesses(count)...,
-			)
+	suite.Run("NoNils", func() {
+		for _, count := range []int{1, 2, 5} {
+			suite.Run(fmt.Sprintf("count=%d", count), func() {
+				checkRedirect := NewCheckRedirects(
+					suite.checkRedirectSuccesses(count)...,
+				)
 
-			suite.Require().NotNil(checkRedirect)
+				suite.Require().NotNil(checkRedirect)
 
-			// won't matter what's passed, as our test functions don't use the parameters
-			suite.NoError(checkRedirect(nil, nil))
-		})
-	}
+				// won't matter what's passed, as our test functions don't use the parameters
+				suite.NoError(checkRedirect(nil, nil))
+			})
+		}
+	})
+
+	suite.Run("WithNils", func() {
+		checkRedirect := NewCheckRedirects(
+			suite.checkRedirectSuccess,
+			nil,
+			suite.checkRedirectSuccess,
+		)
+
+		suite.Require().NotNil(checkRedirect)
+
+		// won't matter what's passed, as our test functions don't use the parameters
+		suite.NoError(checkRedirect(nil, nil))
+	})
 }
 
 func (suite *RedirectTestSuite) testNewCheckRedirectsFail() {
-	for _, count := range []int{1, 2, 5} {
-		suite.Run(fmt.Sprintf("count=%d", count), func() {
-			components := suite.checkRedirectSuccesses(count)
+	suite.Run("NoNils", func() {
+		for _, count := range []int{1, 2, 5} {
+			suite.Run(fmt.Sprintf("count=%d", count), func() {
+				components := suite.checkRedirectSuccesses(count)
 
-			// any fail will fail the entire check
-			components[len(components)/2] = suite.checkRedirectFail
-			checkRedirect := NewCheckRedirects(components...)
+				// any fail will fail the entire check
+				components[len(components)/2] = suite.checkRedirectFail
+				checkRedirect := NewCheckRedirects(components...)
 
-			suite.Require().NotNil(checkRedirect)
+				suite.Require().NotNil(checkRedirect)
 
-			// won't matter what's passed, as our test functions don't use the parameters
-			suite.Error(checkRedirect(nil, nil))
-		})
-	}
+				// won't matter what's passed, as our test functions don't use the parameters
+				suite.Error(checkRedirect(nil, nil))
+			})
+		}
+	})
+
+	suite.Run("WithNils", func() {
+		checkRedirect := NewCheckRedirects(
+			suite.checkRedirectFail,
+			nil,
+			suite.checkRedirectSuccess,
+		)
+
+		suite.Require().NotNil(checkRedirect)
+
+		// won't matter what's passed, as our test functions don't use the parameters
+		suite.Error(checkRedirect(nil, nil))
+	})
 }
 
 func (suite *RedirectTestSuite) TestNewCheckRedirects() {

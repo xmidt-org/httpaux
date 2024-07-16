@@ -70,28 +70,39 @@ func MaxRedirects(max int) CheckRedirect {
 // supplied.  Additionally, any nil checks are skipped.  If all checks
 // are nil, this function also returns nil.
 func NewCheckRedirects(checks ...CheckRedirect) CheckRedirect {
-	if len(checks) == 0 {
+	// skip nils, but check first before making a copy
+	count := 0
+	for _, c := range checks {
+		if c != nil {
+			count++
+		}
+	}
+
+	if count == 0 {
 		return nil
 	}
 
-	// check nils before allocating a copy
+	// now make our safe copy.  this avoids soft memory leaks, since
+	// this slice will be around a while.
+	clone := make([]CheckRedirect, 0, count)
 	for _, c := range checks {
-		if c == nil {
-			return nil
+		if c != nil {
+			clone = append(clone, c)
 		}
 	}
 
-	// optimization:  if there's only (1) check, just use that
-	if len(checks) == 1 {
-		return checks[0]
+	if len(clone) == 1 {
+		// optimization: use the sole non-nil check as is
+		return clone[0]
 	}
 
-	checks = append([]CheckRedirect{}, checks...)
-	return func(request *http.Request, via []*http.Request) (err error) {
-		for i := 0; err == nil && i < len(checks); i++ {
-			err = checks[i](request, via)
+	return func(request *http.Request, via []*http.Request) error {
+		for _, c := range clone {
+			if err := c(request, via); err != nil {
+				return err
+			}
 		}
 
-		return
+		return nil
 	}
 }
