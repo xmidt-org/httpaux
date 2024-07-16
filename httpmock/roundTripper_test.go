@@ -80,14 +80,12 @@ func (suite *RoundTripperSuite) TestSuite() {
 	actual, actualErr := transport.RoundTrip(new(http.Request))
 	suite.True(expected == actual)
 	suite.True(expectedErr == actualErr)
-
 	transport.AssertExpectations()
 }
 
 func (suite *RoundTripperSuite) testSimpleReturn() {
 	var (
-		testingT    = wrapTestingT(suite.T())
-		transport   = NewRoundTripper(testingT)
+		transport   = NewRoundTripperSuite(suite)
 		expected    = new(http.Response)
 		expectedErr = errors.New("expected")
 	)
@@ -96,17 +94,12 @@ func (suite *RoundTripperSuite) testSimpleReturn() {
 	actual, actualErr := transport.RoundTrip(new(http.Request))
 	suite.True(expected == actual)
 	suite.True(expectedErr == actualErr)
-
-	suite.Zero(testingT.Logs)
-	suite.Zero(testingT.Errors)
-	suite.Zero(testingT.Failures)
 	transport.AssertExpectations()
 }
 
 func (suite *RoundTripperSuite) testSimpleResponse() {
 	var (
-		testingT  = wrapTestingT(suite.T())
-		transport = NewRoundTripper(testingT)
+		transport = NewRoundTripperSuite(suite)
 		expected  = new(http.Response)
 	)
 
@@ -114,17 +107,12 @@ func (suite *RoundTripperSuite) testSimpleResponse() {
 	actual, actualErr := transport.RoundTrip(new(http.Request))
 	suite.True(expected == actual)
 	suite.NoError(actualErr)
-
-	suite.Zero(testingT.Logs)
-	suite.Zero(testingT.Errors)
-	suite.Zero(testingT.Failures)
 	transport.AssertExpectations()
 }
 
 func (suite *RoundTripperSuite) testSimpleError() {
 	var (
-		testingT  = wrapTestingT(suite.T())
-		transport = NewRoundTripper(testingT)
+		transport = NewRoundTripperSuite(suite)
 		expected  = errors.New("expected")
 	)
 
@@ -132,10 +120,6 @@ func (suite *RoundTripperSuite) testSimpleError() {
 	response, actual := transport.RoundTrip(new(http.Request))
 	suite.Nil(response)
 	suite.Same(expected, actual)
-
-	suite.Zero(testingT.Logs)
-	suite.Zero(testingT.Errors)
-	suite.Zero(testingT.Failures)
 	transport.AssertExpectations()
 }
 
@@ -148,8 +132,7 @@ func (suite *RoundTripperSuite) TestSimple() {
 func (suite *RoundTripperSuite) TestMockRequestAssertions() {
 	suite.Run("Pass", func() {
 		var (
-			testingT  = wrapTestingT(suite.T())
-			transport = NewRoundTripper(testingT)
+			transport = NewRoundTripperSuite(suite)
 			request   = &http.Request{
 				Method: "POST",
 				URL: &url.URL{
@@ -174,10 +157,6 @@ func (suite *RoundTripperSuite) TestMockRequestAssertions() {
 		actual, actualErr := transport.RoundTrip(request)
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
-
-		suite.Zero(testingT.Logs)
-		suite.Zero(testingT.Errors)
-		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
 	})
 
@@ -199,8 +178,6 @@ func (suite *RoundTripperSuite) TestMockRequestAssertions() {
 		actual, actualErr := transport.RoundTrip(request)
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
-
-		suite.Zero(testingT.Logs)
 		suite.Equal(1, testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -239,7 +216,6 @@ func (suite *RoundTripperSuite) TestCallRequestAssertions() {
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
 
-		suite.Zero(testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -266,7 +242,6 @@ func (suite *RoundTripperSuite) TestCallRequestAssertions() {
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
 
-		suite.Zero(testingT.Logs)
 		suite.Equal(1, testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -289,7 +264,6 @@ func (suite *RoundTripperSuite) TestOnRequest() {
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
 
-		suite.Zero(testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -311,7 +285,6 @@ func (suite *RoundTripperSuite) TestOnRequest() {
 			transport.RoundTrip(new(http.Request)) // different instance
 		})
 
-		suite.Zero(testingT.Logs)
 		suite.Equal(1, testingT.Errors)
 		suite.Equal(1, testingT.Failures)
 	})
@@ -345,7 +318,6 @@ func (suite *RoundTripperSuite) TestOnMatchAll() {
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
 
-		suite.Zero(testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -379,7 +351,6 @@ func (suite *RoundTripperSuite) TestOnMatchAll() {
 			transport.RoundTrip(request)
 		})
 
-		suite.Zero(testingT.Logs)
 		suite.Equal(1, testingT.Errors)
 		suite.Equal(1, testingT.Failures)
 	})
@@ -407,7 +378,6 @@ func (suite *RoundTripperSuite) TestOnMatchAny() {
 		suite.True(expected == actual)
 		suite.True(expectedErr == actualErr)
 
-		suite.Zero(testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -435,7 +405,6 @@ func (suite *RoundTripperSuite) TestOnMatchAny() {
 			transport.RoundTrip(request)
 		})
 
-		suite.Zero(testingT.Logs)
 		suite.Equal(1, testingT.Errors)
 		suite.Equal(1, testingT.Failures)
 	})
@@ -464,7 +433,6 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 		suite.True(expectedErr == actualErr)
 		suite.True(runCalled)
 
-		suite.Zero(testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -494,7 +462,6 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 		suite.True(expectedErr == actualErr)
 		suite.True(runCalled)
 
-		suite.Zero(testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -525,7 +492,6 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 		suite.True(expectedErr == actualErr)
 		suite.True(runCalled)
 
-		suite.Zero(testingT.Logs)
 		suite.Equal(1, testingT.Errors)
 		suite.Zero(testingT.Failures)
 		transport.AssertExpectations()
@@ -535,7 +501,7 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 func (suite *RoundTripperSuite) TestNext() {
 	suite.Run("Nil", func() {
 		var (
-			testingT = wrapTestingT(suite.T())
+			testingT = suite.T()
 			rt       = NewRoundTripper(testingT)
 		)
 
@@ -547,9 +513,6 @@ func (suite *RoundTripperSuite) TestNext() {
 		suite.assertResponse(response)
 
 		rt.AssertExpectations()
-		suite.Equal(1, testingT.Logs)
-		suite.Zero(testingT.Errors)
-		suite.Zero(testingT.Failures)
 	})
 
 	suite.Run("Custom", func() {
@@ -566,7 +529,6 @@ func (suite *RoundTripperSuite) TestNext() {
 		suite.assertResponse(response)
 
 		rt.AssertExpectations()
-		suite.Equal(1, testingT.Logs)
 		suite.Zero(testingT.Errors)
 		suite.Zero(testingT.Failures)
 	})

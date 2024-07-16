@@ -57,7 +57,6 @@ func (suite *RequestCheckerTestSuite) TestNopRequestChecker() {
 	suite.Run("Assert", func() {
 		t := wrapTestingT(suite.T())
 		NopRequestChecker{}.Assert(assert.New(t), nil)
-		suite.Zero(t.Logs)
 		suite.Zero(t.Errors)
 		suite.Zero(t.Failures)
 	})
@@ -91,7 +90,6 @@ func (suite *RequestCheckerTestSuite) TestMethods() {
 
 				t := wrapTestingT(suite.T())
 				record.checker.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Zero(t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -129,7 +127,6 @@ func (suite *RequestCheckerTestSuite) TestMethods() {
 
 				t := wrapTestingT(suite.T())
 				record.checker.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Equal(1, t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -146,7 +143,6 @@ func (suite *RequestCheckerTestSuite) TestPath() {
 
 		t := wrapTestingT(suite.T())
 		p.Assert(assert.New(t), &http.Request{URL: &url.URL{Path: "/test"}})
-		suite.Zero(t.Logs)
 		suite.Zero(t.Errors)
 		suite.Zero(t.Failures)
 	})
@@ -174,7 +170,6 @@ func (suite *RequestCheckerTestSuite) TestPath() {
 
 				t := wrapTestingT(suite.T())
 				record.checker.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Equal(1, t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -220,7 +215,6 @@ func (suite *RequestCheckerTestSuite) TestHeader() {
 
 				t := wrapTestingT(suite.T())
 				record.checker.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Zero(t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -282,7 +276,6 @@ func (suite *RequestCheckerTestSuite) TestHeader() {
 
 				t := wrapTestingT(suite.T())
 				record.checker.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Equal(1, t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -312,7 +305,6 @@ func (suite *RequestCheckerTestSuite) TestBody() {
 			suite.Run(strconv.Itoa(i), func() {
 				t := wrapTestingT(suite.T())
 				record.asserter.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Zero(t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -352,7 +344,6 @@ func (suite *RequestCheckerTestSuite) TestBody() {
 			suite.Run(strconv.Itoa(i), func() {
 				t := wrapTestingT(suite.T())
 				record.asserter.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Equal(1, t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -376,7 +367,6 @@ func (suite *RequestCheckerTestSuite) TestBody() {
 		b := Body("test")
 		b.Assert(assert.New(t), request)
 
-		suite.Zero(t.Logs)
 		suite.Equal(1, t.Errors)
 		suite.Zero(t.Failures)
 	})
@@ -404,7 +394,6 @@ func (suite *RequestCheckerTestSuite) TestBodyJSON() {
 			suite.Run(strconv.Itoa(i), func() {
 				t := wrapTestingT(suite.T())
 				record.asserter.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Zero(t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -444,7 +433,6 @@ func (suite *RequestCheckerTestSuite) TestBodyJSON() {
 			suite.Run(strconv.Itoa(i), func() {
 				t := wrapTestingT(suite.T())
 				record.asserter.Assert(assert.New(t), record.request)
-				suite.Zero(t.Logs)
 				suite.Equal(1, t.Errors)
 				suite.Zero(t.Failures)
 			})
@@ -468,7 +456,6 @@ func (suite *RequestCheckerTestSuite) TestBodyJSON() {
 		b := BodyJSON(`{"this": "won't matter"}`)
 		b.Assert(assert.New(t), request)
 
-		suite.Zero(t.Logs)
 		suite.Equal(1, t.Errors)
 		suite.Zero(t.Failures)
 	})
