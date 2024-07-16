@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+// SPDX-License-Identifier: Apache-2.0
+
 //nolint:bodyclose,errorlint // no server responses and all errors must be unwrapped
 package httpmock
 

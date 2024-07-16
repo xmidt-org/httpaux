@@ -1,0 +1,37 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: httpaux
+Upstream-Contact: John Bass <john_bass2@cable.comcast.com>
+Source: https://github.com/xmidt-org/httpaux
+
+Files: NOTICE
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: .gitignore
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: .whitesource
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: CONTRIBUTING.md
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: MAINTAINERS.md
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: README.md
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: go.mod
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: go.sum
+Copyright: SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
