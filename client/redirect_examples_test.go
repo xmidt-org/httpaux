@@ -12,7 +12,7 @@ import (
 func ExampleCopyHeadersOnRedirect() {
 	request := httptest.NewRequest("GET", "/", nil)
 	previous := httptest.NewRequest("GET", "/", nil)
-	previous.Header.Set("Copy-Me", "value")
+	previous.Header.Set("Copy-Me", "copied value")
 
 	client := http.Client{
 		CheckRedirect: CopyHeadersOnRedirect("copy-me"), // canonicalization will happen
@@ -26,7 +26,7 @@ func ExampleCopyHeadersOnRedirect() {
 	fmt.Println(request.Header.Get("Copy-Me"))
 
 	// Output:
-	// value
+	// copied value
 }
 
 func ExampleMaxRedirects() {
@@ -46,4 +46,32 @@ func ExampleMaxRedirects() {
 	// Output:
 	// fewer than 5 redirects
 	// max redirects exceeded
+}
+
+func ExampleNewCheckRedirects() {
+	request := httptest.NewRequest("GET", "/", nil)
+	previous := httptest.NewRequest("GET", "/", nil)
+	previous.Header.Set("Copy-Me", "copied value")
+
+	client := http.Client{
+		CheckRedirect: NewCheckRedirects(
+			MaxRedirects(10),
+			CopyHeadersOnRedirect("Copy-Me"),
+			func(*http.Request, []*http.Request) error {
+				fmt.Println("custom check redirect")
+				return nil
+			},
+		),
+	}
+
+	if err := client.CheckRedirect(request, []*http.Request{previous}); err != nil {
+		// shouldn't be output
+		fmt.Println(err)
+	}
+
+	fmt.Println(request.Header.Get("Copy-Me"))
+
+	// Output:
+	// custom check redirect
+	// copied value
 }
