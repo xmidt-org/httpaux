@@ -50,15 +50,15 @@ func (suite *FieldsTestSuite) TestClone() {
 	f := Fields{}
 
 	clone := f.Clone()
-	suite.Equal(f, clone)
-	suite.NotSame(f, clone)
+	suite.Equal(&f, &clone)
+	suite.NotSame(&f, &clone)
 
 	f["foo"] = "bar"
 	f["moo"] = 123
 
 	clone = f.Clone()
-	suite.Equal(f, clone)
-	suite.NotSame(f, clone)
+	suite.Equal(&f, &clone)
+	suite.NotSame(&f, &clone)
 }
 
 func (suite *FieldsTestSuite) TestMerge() {
