@@ -31,7 +31,7 @@ func (suite *HeaderTestSuite) TestEmptyHeader() {
 	suite.Zero(h.Len())
 
 	n := h.AppendHeaders("Header1", "value1")
-	suite.NotSame(n, h)
+	suite.NotSame(&n, &h)
 	suite.assertHeader(
 		http.Header{
 			"Header1": {"value1"},
