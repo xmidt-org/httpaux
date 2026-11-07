@@ -53,8 +53,8 @@ type Client struct {
 	// intervals is the precomputed retry intervals, including jitter
 	intervals intervals
 
-	// random is the source of randomness
-	random Random
+	// jitterRandomness is the source of randomness used to compute jitter
+	jitterRandomness Random
 
 	// timer is the Timer strategy used to wait between retries
 	timer Timer
@@ -70,20 +70,20 @@ type Client struct {
 // is nil, http.DefaultClient is used.
 func New(cfg Config, next httpaux.Client) (c *Client) {
 	c = &Client{
-		next:      next,
-		intervals: newIntervals(cfg),
-		random:    cfg.Random,
-		timer:     cfg.Timer,
-		check:     cfg.Check,
+		next:             next,
+		intervals:        newIntervals(cfg),
+		jitterRandomness: cfg.Random,
+		timer:            cfg.Timer,
+		check:            cfg.Check,
 	}
 
 	if c.next == nil {
 		c.next = http.DefaultClient
 	}
 
-	if c.random == nil {
+	if c.jitterRandomness == nil {
 		//nolint:gosec // jitter does not need a cryptographic source
-		c.random = rand.New(
+		c.jitterRandomness = rand.New(
 			rand.NewSource(time.Now().Unix()),
 		)
 	}
@@ -137,7 +137,7 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 
 	getBody := original.GetBody
 	for i := range c.Retries() {
-		wait := c.intervals.duration(c.random, i)
+		wait := c.intervals.duration(c.jitterRandomness, i)
 		tc, stop := c.timer(wait)
 
 		// call this here, so that the response is cleaned up
