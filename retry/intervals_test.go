@@ -82,7 +82,7 @@ func (suite *IntervalsTestSuite) testDurationSimple() {
 			actual := newIntervals(record.cfg)
 			suite.Equal(record.expected, actual)
 
-			for attempt := 0; attempt < actual.Len(); attempt++ {
+			for attempt := range actual.Len() {
 				suite.Run(fmt.Sprintf("attempt:%d", attempt), func() {
 					m := new(mockRandom)
 					suite.Equal(actual[attempt].base, actual.duration(m, attempt))
@@ -154,7 +154,7 @@ func (suite *IntervalsTestSuite) testDurationMultiplier() {
 			actual := newIntervals(record.cfg)
 			suite.Equal(record.expected, actual)
 
-			for attempt := 0; attempt < actual.Len(); attempt++ {
+			for attempt := range actual.Len() {
 				suite.Run(fmt.Sprintf("attempt:%d", attempt), func() {
 					m := new(mockRandom)
 					suite.Equal(actual[attempt].base, actual.duration(m, attempt))
@@ -248,7 +248,7 @@ func (suite *IntervalsTestSuite) testDurationJitter() {
 			actual := newIntervals(record.cfg)
 			suite.Equal(record.expected, actual)
 
-			for attempt := 0; attempt < actual.Len(); attempt++ {
+			for attempt := range actual.Len() {
 				suite.Run(fmt.Sprintf("attempt:%d", attempt), func() {
 					m := new(mockRandom)
 					m.On("Int63n", actual[attempt].jitter).Return(int64(0)).Once()

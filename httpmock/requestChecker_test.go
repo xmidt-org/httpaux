@@ -73,15 +73,15 @@ func (suite *RequestCheckerTestSuite) TestMethods() {
 		}{
 			{
 				checker: Methods("GET"),
-				request: &http.Request{Method: "GET"},
+				request: &http.Request{Method: http.MethodGet},
 			},
 			{
 				checker: Methods("POST", "PUT"),
-				request: &http.Request{Method: "PUT"},
+				request: &http.Request{Method: http.MethodPut},
 			},
 			{
 				checker: Methods("POST", "PUT", "GET"),
-				request: &http.Request{Method: "POST"},
+				request: &http.Request{Method: http.MethodPost},
 			},
 		}
 
@@ -110,15 +110,15 @@ func (suite *RequestCheckerTestSuite) TestMethods() {
 			},
 			{
 				checker: Methods("GET"),
-				request: &http.Request{Method: "POST"},
+				request: &http.Request{Method: http.MethodPost},
 			},
 			{
 				checker: Methods("POST", "PUT"),
-				request: &http.Request{Method: "PATCH"},
+				request: &http.Request{Method: http.MethodPatch},
 			},
 			{
 				checker: Methods("POST", "PUT", "GET"),
-				request: &http.Request{Method: "DELETE"},
+				request: &http.Request{Method: http.MethodDelete},
 			},
 		}
 

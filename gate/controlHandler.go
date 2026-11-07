@@ -34,12 +34,15 @@ type ControlHandler struct {
 }
 
 // ServeHTTP invokes the StateChange closure and takes the appropriate action
-func (ch ControlHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (ch ControlHandler) ServeHTTP(_ http.ResponseWriter, request *http.Request) {
 	switch ch.StateChange(request) {
 	case StateOpen:
 		ch.Gate.Open()
 
 	case StateClose:
 		ch.Gate.Close()
+
+	case StateNoChange:
+		// nothing to do
 	}
 }

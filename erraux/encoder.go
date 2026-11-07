@@ -207,7 +207,7 @@ type asEncoder struct {
 	fields     Fields
 }
 
-func (ae *asEncoder) encodeStatusAndHeaders(ec errorContext) (target error, statusCode int, handled bool) {
+func (ae *asEncoder) encodeStatusAndHeaders(ec errorContext) (statusCode int, handled bool, target error) {
 	targetPtr := reflect.New(ae.target)
 	handled = errors.As(ec.err, targetPtr.Interface())
 	if handled {
@@ -232,7 +232,7 @@ func (ae *asEncoder) encodeStatusAndHeaders(ec errorContext) (target error, stat
 }
 
 func (ae *asEncoder) encodeNoBody(ec errorContext) bool {
-	_, _, handled := ae.encodeStatusAndHeaders(ec)
+	_, handled, _ := ae.encodeStatusAndHeaders(ec)
 	return handled
 }
 
@@ -242,7 +242,7 @@ func (ae *asEncoder) newErrorEncoder(disableBody bool) errorEncoder {
 	}
 
 	return func(ec errorContext) bool {
-		target, statusCode, handled := ae.encodeStatusAndHeaders(ec)
+		statusCode, handled, target := ae.encodeStatusAndHeaders(ec)
 		if handled {
 			fields := ae.fields.Clone()
 			fields.SetCode(statusCode)
@@ -309,7 +309,7 @@ func As(target interface{}) EncoderRule {
 	var targetType reflect.Type
 	t := reflect.TypeOf(target)
 	switch {
-	case t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Interface:
+	case t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.Interface:
 		targetType = t.Elem() // the interface type: errors.As((*MyInterface)(nil))
 
 	case t.Implements(errorType):

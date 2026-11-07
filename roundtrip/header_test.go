@@ -37,9 +37,9 @@ func TestHeader(t *testing.T) {
 		httpmock.Header("Header1", "value1"),
 	).Return(expected, expectedErr).Once()
 
-	actual, actualErr := decorated.RoundTrip(request) //nolint:bodyclose
+	actual, actualErr := decorated.RoundTrip(request)
 	assert.True(expected == actual)
-	assert.True(expectedErr == actualErr) //nolint:errorlint
+	assert.True(expectedErr == actualErr) //nolint:errorlint // comparing the unwrapped error is the point
 
 	rt.AssertExpectations()
 }

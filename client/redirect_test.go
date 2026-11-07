@@ -19,12 +19,12 @@ type RedirectTestSuite struct {
 func (suite *RedirectTestSuite) testCopyHeadersOnRedirectWithNames() {
 	var (
 		via = []*http.Request{
-			&http.Request{
+			{
 				Header: http.Header{
 					"X-Original": []string{"should not be copied"},
 				},
 			},
-			&http.Request{
+			{
 				Header: http.Header{
 					"X-Original":   []string{"overwritten"},
 					"Single-Value": []string{"value1"},

@@ -25,7 +25,6 @@ func TestFunc(t *testing.T) {
 		expectedErr = errors.New("expected")
 	)
 
-	//nolint:bodyclose
 	actual, actualErr := Func(func(r *http.Request) (*http.Response, error) {
 		assert.Same(request, r)
 		return expected, expectedErr
@@ -72,7 +71,7 @@ func (suite *ChainTestSuite) assertRequest(expectedOrder []int, client httpaux.C
 	suite.Require().NotNil(client)
 
 	suite.order = nil
-	request, err := http.NewRequest("GET", suite.server.URL+"/test", nil)
+	request, err := http.NewRequest(http.MethodGet, suite.server.URL+"/test", nil)
 	suite.Require().NoError(err)
 
 	response, err := client.Do(request)

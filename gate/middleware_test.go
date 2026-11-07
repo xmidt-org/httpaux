@@ -44,7 +44,7 @@ func (suite *ServerTestSuite) SetupTest() {
 	})
 
 	suite.response = httptest.NewRecorder()
-	suite.request = httptest.NewRequest("GET", "/", nil)
+	suite.request = httptest.NewRequest(http.MethodGet, "/", nil)
 }
 
 func (suite *ServerTestSuite) TestNilGate() {
@@ -129,7 +129,7 @@ func (suite *ClientTestSuite) SetupTest() {
 	})
 
 	var err error
-	suite.request, err = http.NewRequest("GET", suite.server.URL+"/test", nil)
+	suite.request, err = http.NewRequest(http.MethodGet, suite.server.URL+"/test", nil)
 	suite.Require().NoError(err)
 }
 
@@ -153,7 +153,7 @@ func (suite *ClientTestSuite) checkRoundTripper(rt http.RoundTripper) (*http.Res
 		rt.(checkCloseIdler).CloseIdleConnections()
 	})
 
-	request, err := http.NewRequest("GET", suite.server.URL+"/test", nil)
+	request, err := http.NewRequest(http.MethodGet, suite.server.URL+"/test", nil)
 	suite.Require().NoError(err)
 
 	return rt.RoundTrip(request)

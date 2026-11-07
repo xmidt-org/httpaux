@@ -18,14 +18,14 @@ func testConstantHandlerDefault(t *testing.T) {
 		assert = assert.New(t)
 
 		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
+		request  = httptest.NewRequest(http.MethodGet, "/", nil)
 
 		ch ConstantHandler
 	)
 
 	ch.ServeHTTP(response, request)
 	assert.Equal(http.StatusOK, response.Code)
-	assert.Empty(response.Result().Header) // nolint:bodyclose
+	assert.Empty(response.Result().Header)
 	assert.Empty(response.Body.String())
 }
 
@@ -36,7 +36,7 @@ func testConstantHandlerText(t *testing.T) {
 		assert = assert.New(t)
 
 		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
+		request  = httptest.NewRequest(http.MethodGet, "/", nil)
 
 		ch = ConstantHandler{
 			StatusCode:  217,
@@ -54,7 +54,7 @@ func testConstantHandlerText(t *testing.T) {
 			"Content-Type":   {"text/plain"},
 			"Content-Length": {strconv.Itoa(len(text))},
 		},
-		response.Result().Header, // nolint:bodyclose
+		response.Result().Header,
 	)
 
 	assert.Equal(text, response.Body.String())
@@ -67,7 +67,7 @@ func testConstantHandlerNoContentType(t *testing.T) {
 		assert = assert.New(t)
 
 		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
+		request  = httptest.NewRequest(http.MethodGet, "/", nil)
 
 		ch = ConstantHandler{
 			StatusCode: 217,
@@ -83,7 +83,7 @@ func testConstantHandlerNoContentType(t *testing.T) {
 			"Test":           {"true"},
 			"Content-Length": {strconv.Itoa(len(text))},
 		},
-		response.Result().Header, // nolint:bodyclose
+		response.Result().Header,
 	)
 
 	assert.Equal(text, response.Body.String())
@@ -106,7 +106,7 @@ func TestConstantJSON(t *testing.T) {
 		require = require.New(t)
 
 		response = httptest.NewRecorder()
-		request  = httptest.NewRequest("GET", "/", nil)
+		request  = httptest.NewRequest(http.MethodGet, "/", nil)
 
 		ch, err = ConstantJSON(Message{Name: "Joe Schmoe", Age: 152})
 	)
@@ -119,7 +119,7 @@ func TestConstantJSON(t *testing.T) {
 			"Content-Type":   {"application/json; charset=utf-8"},
 			"Content-Length": {strconv.Itoa(len(ch.Body))},
 		},
-		response.Result().Header, // nolint:bodyclose
+		response.Result().Header,
 	)
 
 	assert.JSONEq(

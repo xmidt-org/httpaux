@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-//nolint:bodyclose // none of these test use a "real" response body
 package retry
 
 import (
@@ -559,7 +558,7 @@ func (suite *ClientTestSuite) TestContextCancel() {
 		rt.OnAny().AssertRequest(httpmock.Path("/test")).Return(new(http.Response), nil).Once()
 
 		requestCtx, cancel := context.WithCancel(context.Background())
-		request, err := http.NewRequestWithContext(requestCtx, "GET", "/test", nil)
+		request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, "/test", nil)
 		suite.Require().NoError(err)
 		suite.Require().NotNil(request)
 
@@ -638,7 +637,7 @@ func (suite *ClientTestSuite) TestContextCancel() {
 			}).
 			Once()
 
-		request, err := http.NewRequestWithContext(requestCtx, "GET", "/test", nil)
+		request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, "/test", nil)
 		suite.Require().NoError(err)
 		suite.Require().NotNil(request)
 
@@ -702,7 +701,7 @@ func (suite *ClientTestSuite) TestGetBodyError() {
 		expectedErr = errors.New("expected wrapped GetBody error")
 	)
 
-	request, err := http.NewRequest("GET", "/test", nil)
+	request, err := http.NewRequest(http.MethodGet, "/test", nil)
 	suite.Require().NoError(err)
 	suite.Require().NotNil(request)
 	request.GetBody = func() (io.ReadCloser, error) {

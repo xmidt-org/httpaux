@@ -20,7 +20,7 @@ func ExampleThen() {
 			})
 
 			// this will normally be done in another nested handler
-			o.WriteHeader(201)
+			o.WriteHeader(http.StatusCreated)
 
 			// now, decorator code can access observed information
 			fmt.Println("observed status code:", o.StatusCode())
@@ -28,7 +28,7 @@ func ExampleThen() {
 	)
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest("GET", "/example", nil)
+	request := httptest.NewRequest(http.MethodGet, "/example", nil)
 	decorator.ServeHTTP(response, request)
 
 	// Output:

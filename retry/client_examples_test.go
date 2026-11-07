@@ -24,7 +24,7 @@ func ExampleClient_simple() {
 
 		// custom Check, if desired
 		Check: func(r *http.Response, err error) bool {
-			return err == nil && r.StatusCode != 200
+			return err == nil && r.StatusCode != http.StatusOK
 		},
 	}, new(http.Client))
 	fmt.Println(client.Retries())

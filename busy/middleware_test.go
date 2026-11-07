@@ -38,14 +38,14 @@ func (suite *ServerTestSuite) TestLimited() {
 	suite.Require().NotNil(decorator)
 
 	first := httptest.NewRecorder()
-	decorator.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
+	decorator.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/", nil))
 	suite.Equal(222, first.Code)
 	suite.Zero(suite.limiter.counter)
 
 	// simulate an overloaded handler
 	suite.limiter.counter = 1
 	second := httptest.NewRecorder()
-	decorator.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
+	decorator.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/", nil))
 	suite.Equal(http.StatusServiceUnavailable, second.Code)
 	suite.Equal(int64(1), suite.limiter.counter)
 }
@@ -61,14 +61,14 @@ func (suite *ServerTestSuite) TestCustomBusy() {
 	suite.Require().NotNil(decorator)
 
 	first := httptest.NewRecorder()
-	decorator.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
+	decorator.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/", nil))
 	suite.Equal(222, first.Code)
 	suite.Zero(suite.limiter.counter)
 
 	// simulate an overloaded handler
 	suite.limiter.counter = 1
 	second := httptest.NewRecorder()
-	decorator.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
+	decorator.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/", nil))
 	suite.Equal(599, second.Code)
 	suite.Equal(int64(1), suite.limiter.counter)
 }

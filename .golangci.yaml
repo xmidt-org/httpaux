@@ -1,32 +1,82 @@
 # SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
 # SPDX-License-Identifier: Apache-2.0
 ---
-linters-settings:
-  misspell:
-    locale: US
-  errorlint:
-    # Report non-wrapping error creation using fmt.Errorf
-    errorf: false
-
+version: "2"
 linters:
+  default: standard
   enable:
+    - asasalint
+    - asciicheck
+    - bidichk
     - bodyclose
+    - copyloopvar
     - dupl
+    - durationcheck
+    - errname
     - errorlint
+    - exhaustive
     - funlen
+    - gocheckcompilerdirectives
     - goconst
+    - gocritic
     - gosec
+    - intrange
+    - makezero
     - misspell
-    - unconvert
+    - nilerr
+    - noctx
+    - nolintlint
+    - predeclared
     - prealloc
+    - reassign
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - usestdlibvars
+    - wastedassign
   disable:
     - errcheck
     - ineffassign
-
-issues:
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - dupl
-        - funlen
-        - bodyclose
+  settings:
+    errorlint:
+      errorf: false
+    misspell:
+      locale: US
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - bodyclose
+          - dupl
+          - funlen
+          - goconst
+          - gosec
+          - noctx
+        path: _test.go
+      - linters:
+          - revive
+        text: unused-parameter
+        path: _test.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

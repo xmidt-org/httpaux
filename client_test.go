@@ -35,7 +35,7 @@ func (suite *CleanupTestSuite) TestNilBody() {
 
 func (suite *CleanupTestSuite) TestClosed() {
 	tb := new(testBody)
-	tb.Buffer.WriteString("test")
+	tb.WriteString("test")
 	Cleanup(&http.Response{
 		Body: tb,
 	})

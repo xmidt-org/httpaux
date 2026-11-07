@@ -62,7 +62,7 @@ type PreserveCloseIdlerTestSuite struct {
 var _ suite.BeforeTest = (*PreserveCloseIdlerTestSuite)(nil)
 
 func (suite *PreserveCloseIdlerTestSuite) BeforeTest(_, testName string) {
-	suite.request = httptest.NewRequest("GET", "/"+testName, nil)
+	suite.request = httptest.NewRequest(http.MethodGet, "/"+testName, nil)
 	suite.response = &http.Response{
 		StatusCode: 214,
 		Header: http.Header{

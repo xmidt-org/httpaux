@@ -226,7 +226,7 @@ func (g *gate) Register(h Hook) {
 	defer g.stateLock.Unlock()
 	g.stateLock.Lock()
 
-	isOpen := g.status.IsOpen()
+	isOpen := g.IsOpen()
 	if h.OnOpen != nil {
 		g.onOpen = append(g.onOpen, h.OnOpen)
 		if isOpen {
@@ -243,13 +243,13 @@ func (g *gate) Register(h Hook) {
 }
 
 func (g *gate) Open() (opened bool) {
-	if g.status.IsOpen() {
+	if g.IsOpen() {
 		return
 	}
 
 	defer g.stateLock.Unlock()
 	g.stateLock.Lock()
-	opened = g.status.open()
+	opened = g.open()
 	if opened {
 		g.onOpen.on(g.status)
 	}
@@ -258,13 +258,13 @@ func (g *gate) Open() (opened bool) {
 }
 
 func (g *gate) Close() (closed bool) {
-	if !g.status.IsOpen() {
+	if !g.IsOpen() {
 		return
 	}
 
 	defer g.stateLock.Unlock()
 	g.stateLock.Lock()
-	closed = g.status.close()
+	closed = g.close()
 	if closed {
 		g.onClosed.on(g.status)
 	}

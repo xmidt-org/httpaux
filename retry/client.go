@@ -82,7 +82,7 @@ func New(cfg Config, next httpaux.Client) (c *Client) {
 	}
 
 	if c.random == nil {
-		//nolint:gosec
+		//nolint:gosec // jitter does not need a cryptographic source
 		c.random = rand.New(
 			rand.NewSource(time.Now().Unix()),
 		)
@@ -136,7 +136,7 @@ func (c *Client) Do(original *http.Request) (*http.Response, error) {
 	}
 
 	getBody := original.GetBody
-	for i := 0; i < c.Retries(); i++ {
+	for i := range c.Retries() {
 		wait := c.intervals.duration(c.random, i)
 		tc, stop := c.timer(wait)
 

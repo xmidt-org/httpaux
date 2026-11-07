@@ -26,14 +26,14 @@ func TestHeader(t *testing.T) {
 
 		decorated = Header(h.SetTo)(handler)
 
-		request  = httptest.NewRequest("GET", "/", nil)
+		request  = httptest.NewRequest(http.MethodGet, "/", nil)
 		response = httptest.NewRecorder()
 	)
 
 	require.NotNil(decorated)
 	decorated.ServeHTTP(response, request)
 
-	result := response.Result() //nolint:bodyclose
+	result := response.Result()
 	assert.Equal(299, result.StatusCode)
 	assert.Equal("value1", response.Header().Get("Header1"))
 }

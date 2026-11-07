@@ -13,7 +13,7 @@ import (
 var (
 	// ErrBodyClosed indicates that an attempt to read or close a Body, either request or response,
 	// was made when the Body had already been closed.
-	ErrBodyClosed = errors.New("The body has been closed")
+	ErrBodyClosed = errors.New("the body has been closed")
 )
 
 // Closeable is implemented by anything that can report its closed state.

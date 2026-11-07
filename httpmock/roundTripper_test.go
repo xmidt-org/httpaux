@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-//nolint:bodyclose,errorlint // no server responses and all errors must be unwrapped
+//nolint:errorlint // all errors must be compared unwrapped
 package httpmock
 
 import (
@@ -137,7 +137,7 @@ func (suite *RoundTripperSuite) TestMockRequestAssertions() {
 		var (
 			transport = NewRoundTripperSuite(suite)
 			request   = &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 				URL: &url.URL{
 					Path: "/test",
 				},
@@ -168,7 +168,7 @@ func (suite *RoundTripperSuite) TestMockRequestAssertions() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 			}
 
 			expected    = new(http.Response)
@@ -193,7 +193,7 @@ func (suite *RoundTripperSuite) TestCallRequestAssertions() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 				URL: &url.URL{
 					Path: "/test",
 				},
@@ -229,7 +229,7 @@ func (suite *RoundTripperSuite) TestCallRequestAssertions() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 			}
 
 			expected    = new(http.Response)
@@ -299,7 +299,7 @@ func (suite *RoundTripperSuite) TestOnMatchAll() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 				URL: &url.URL{
 					Path: "/test",
 				},
@@ -331,7 +331,7 @@ func (suite *RoundTripperSuite) TestOnMatchAll() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "GET",
+				Method: http.MethodGet,
 				URL: &url.URL{
 					Path: "/test",
 				},
@@ -365,7 +365,7 @@ func (suite *RoundTripperSuite) TestOnMatchAny() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 			}
 
 			expected    = new(http.Response)
@@ -391,7 +391,7 @@ func (suite *RoundTripperSuite) TestOnMatchAny() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "GET",
+				Method: http.MethodGet,
 			}
 
 			expected    = new(http.Response)
@@ -419,7 +419,7 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "GET",
+				Method: http.MethodGet,
 			}
 
 			expected    = new(http.Response)
@@ -446,7 +446,7 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "GET",
+				Method: http.MethodGet,
 			}
 
 			expected    = new(http.Response)
@@ -475,7 +475,7 @@ func (suite *RoundTripperSuite) TestCustomRun() {
 			testingT  = wrapTestingT(suite.T())
 			transport = NewRoundTripper(testingT)
 			request   = &http.Request{
-				Method: "GET",
+				Method: http.MethodGet,
 			}
 
 			expected    = new(http.Response)
@@ -554,7 +554,7 @@ func TestCloseIdler(t *testing.T) {
 		}
 
 		expected = &http.Request{
-			Method: "GET",
+			Method: http.MethodGet,
 			URL: &url.URL{
 				Scheme: "http",
 				Host:   "localhost",

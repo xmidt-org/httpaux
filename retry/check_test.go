@@ -32,7 +32,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: &http.Response{
-				StatusCode: 200,
+				StatusCode: http.StatusOK,
 			},
 			err:      nil,
 			expected: false, // this was successful ... no need to retry
@@ -60,7 +60,7 @@ func (suite *CheckTestSuite) TestDefaultCheck() {
 		},
 		{
 			response: &http.Response{
-				StatusCode: 200,
+				StatusCode: http.StatusOK,
 			},
 			err: &net.DNSError{IsTemporary: true},
 			// both response and error are not nil, but the error indicates a retry

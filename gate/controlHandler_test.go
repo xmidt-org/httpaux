@@ -70,7 +70,7 @@ func (suite *ControlHandlerTestSuite) Test() {
 			ControlHandler{
 				StateChange: testCase.stateChange,
 				Gate:        testCase.gate,
-			}.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+			}.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
 
 			suite.Equal(200, response.Code)
 			suite.Equal(testCase.expectOpen, testCase.gate.IsOpen())

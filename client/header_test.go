@@ -28,7 +28,7 @@ func TestHeader(t *testing.T) {
 		expected  = new(http.Response)
 	)
 
-	request, err := http.NewRequest("GET", "/", nil)
+	request, err := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(err)
 
 	require.NotNil(decorated)
@@ -36,7 +36,7 @@ func TestHeader(t *testing.T) {
 		httpmock.Header("Header1", "value1"),
 	).Return(expected, nil).Once()
 
-	actual, actualErr := decorated.Do(request) //nolint:bodyclose
+	actual, actualErr := decorated.Do(request)
 	assert.True(expected == actual)
 	assert.NoError(actualErr)
 

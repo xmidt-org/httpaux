@@ -10,8 +10,8 @@ import (
 )
 
 func ExampleCopyHeadersOnRedirect() {
-	request := httptest.NewRequest("GET", "/", nil)
-	previous := httptest.NewRequest("GET", "/", nil)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	previous := httptest.NewRequest(http.MethodGet, "/", nil)
 	previous.Header.Set("Copy-Me", "copied value")
 
 	client := http.Client{
@@ -30,7 +30,7 @@ func ExampleCopyHeadersOnRedirect() {
 }
 
 func ExampleMaxRedirects() {
-	request := httptest.NewRequest("GET", "/", nil)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	client := http.Client{
 		CheckRedirect: MaxRedirects(5),
 	}
@@ -49,8 +49,8 @@ func ExampleMaxRedirects() {
 }
 
 func ExampleNewCheckRedirects() {
-	request := httptest.NewRequest("GET", "/", nil)
-	previous := httptest.NewRequest("GET", "/", nil)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	previous := httptest.NewRequest(http.MethodGet, "/", nil)
 	previous.Header.Set("Copy-Me", "copied value")
 
 	client := http.Client{

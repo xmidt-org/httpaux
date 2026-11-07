@@ -44,16 +44,16 @@ func CopyHeadersOnRedirect(names ...string) CheckRedirect {
 // MaxRedirects returns a CheckRedirect that returns an error if
 // a maximum number of redirects has been reached.  If the max
 // value is 0 or negative, then no redirects are allowed.
-func MaxRedirects(max int) CheckRedirect {
-	if max < 0 {
-		max = 0
+func MaxRedirects(limit int) CheckRedirect {
+	if limit < 0 {
+		limit = 0
 	}
 
 	// create the error once and reuse it
 	// this error text mimics the one used in net/http
-	err := fmt.Errorf("stopped after %d redirects", max)
+	err := fmt.Errorf("stopped after %d redirects", limit)
 	return func(_ *http.Request, via []*http.Request) error {
-		if len(via) >= max {
+		if len(via) >= limit {
 			return err
 		}
 

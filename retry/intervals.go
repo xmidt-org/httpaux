@@ -81,7 +81,7 @@ func newIntervals(cfg Config) intervals {
 	if cfg.Jitter > 0.0 && cfg.Jitter < 1.0 {
 		jitterLo, jitterHi := 1-cfg.Jitter, 1+cfg.Jitter
 
-		for x := 0; x < i.Len(); x++ {
+		for x := range i.Len() {
 			// compute the limits of the jitter window
 			lo := int64(
 				math.Round(float64(i[x].base) * jitterLo),

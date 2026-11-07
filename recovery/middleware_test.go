@@ -37,7 +37,7 @@ type MiddlewareSuite struct {
 }
 
 func (suite *MiddlewareSuite) newTestRequest() *http.Request {
-	return httptest.NewRequest("GET", "/", nil)
+	return httptest.NewRequest(http.MethodGet, "/", nil)
 }
 
 // panicHandler creates a handler that panics with an expected value.

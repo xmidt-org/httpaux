@@ -30,7 +30,7 @@ func (suite *ThenTestSuite) SetupTest() {
 
 func (suite *ThenTestSuite) assertNextIsDecorated(decorated http.Handler) {
 	suite.Require().NotNil(decorated)
-	decorated.ServeHTTP(suite.response, httptest.NewRequest("GET", "/test", nil))
+	decorated.ServeHTTP(suite.response, httptest.NewRequest(http.MethodGet, "/test", nil))
 	suite.Equal(217, suite.response.Code)
 }
 

@@ -25,7 +25,7 @@ func (suite *StateTestSuite) TestPrepareNext() {
 	suite.Run("Initial", func() {
 		suite.Zero(s.Attempt())
 		suite.Equal(2, s.Retries())
-		actual, actualErr := s.Previous() //nolint:bodyclose
+		actual, actualErr := s.Previous()
 		suite.Nil(actual)
 		suite.NoError(actualErr)
 	})
@@ -35,7 +35,7 @@ func (suite *StateTestSuite) TestPrepareNext() {
 		s.prepareNext(nil, expectedErr)
 		suite.Equal(1, s.Attempt())
 		suite.Equal(2, s.Retries())
-		actual, actualErr := s.Previous() //nolint:bodyclose
+		actual, actualErr := s.Previous()
 		suite.Nil(actual)
 		suite.Equal(expectedErr, actualErr)
 	})
@@ -46,7 +46,7 @@ func (suite *StateTestSuite) TestPrepareNext() {
 		s.prepareNext(expected, expectedErr)
 		suite.Equal(2, s.Attempt())
 		suite.Equal(2, s.Retries())
-		actual, actualErr := s.Previous() //nolint:bodyclose
+		actual, actualErr := s.Previous()
 		suite.True(expected == actual)
 		suite.Equal(expectedErr, actualErr)
 	})
@@ -59,7 +59,7 @@ func (suite *StateTestSuite) TestPrepareNext() {
 		s.prepareNext(expected, nil)
 		suite.Equal(3, s.Attempt()) // no attempt is made to keep attempt <= retries
 		suite.Equal(2, s.Retries())
-		actual, actualErr := s.Previous() //nolint:bodyclose
+		actual, actualErr := s.Previous()
 		suite.True(expected == actual)
 		suite.NoError(actualErr)
 		suite.Nil(actual.Body)
